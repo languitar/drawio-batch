@@ -11,7 +11,7 @@ setup(
     author='Johannes Wienke',
     author_email='languitar@semipol.de',
     description='A command line converter for draw.io diagrams',
-    license='LGPL',
+    license='Apache',
 
     packages=find_packages(),
 
@@ -24,4 +24,17 @@ setup(
             'drawio-batch = drawiobatch:main',
         ]
     },
+
+    classifiers=[
+        'License :: OSI Approved :: Apache Software License',
+        'Development Status :: 3 - Alpha',
+        'Environment :: Console',
+        'Intended Audience :: Developers',
+        'Intended Audience :: Information Technology',
+        'Intended Audience :: Science/Research',
+        'Intended Audience :: System Administrators',
+        'Programming Language :: Python :: 3 :: Only',
+        'Programming Language :: JavaScript',
+        'Topic :: Multimedia :: Graphics',
+    ],
 )
