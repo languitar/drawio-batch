@@ -1,0 +1,6 @@
+/drawiobatch/backend.html
+/tags*
+/build
+/dist
+*.egg-info
+*.pyc

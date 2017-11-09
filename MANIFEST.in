@@ -1,0 +1,2 @@
+include backend.html
+include frontend.js.in
