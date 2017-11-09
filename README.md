@@ -20,7 +20,7 @@ Converts diagrams to common image formats by wrapping the existing online conver
 
 Ensure that [html-inline] is on the `PATH`.
 
-```
+```bash
 ./prepare.sh
 python3 setup.py install # with required arguments depending on your setup
 ```
