@@ -1,0 +1,13 @@
+language: python
+python:
+  - "3.6"
+install:
+  - sudo apt-get install phantomjs npm
+  - sudo npm install -g --prefix upstream html-inline
+  - export PATH="upstream/bin:$PATH"
+  - pip install setuptools
+script:
+  - ./prepare.sh
+  - python3 drawiobatch/__init__.py drawio/war/templates/uml/uml_1.xml out.pdf && file out.pdf | grep 'PDF document'
+  - python3 setup.py install && rm -rf drawiobatch && rm -f out.pdf && drawio-batch drawio/war/templates/uml/uml_1.xml out.pdf && file out.pdf | grep 'PDF document'
+
