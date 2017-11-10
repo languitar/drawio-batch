@@ -1,14 +1,3 @@
-/**
- * Times out after 15 seconds.
- */
-window.setTimeout(function ()
-{
-    phantom.exit(1);
-}, 15000);
-
-/**
- * Imports required packages and reads XML from stdin.
- */
 var system = require('system');
 var page = require('webpage').create();
 var xml = system.stdin.readLine();
@@ -26,42 +15,57 @@ var format = system.args[1];
 var scale = system.args[2];
 var quality = system.args[3];
 
-page.open(@FILE@, function(status)
-{
-    if (status === 'success')
-    {
-        // Invoked after all content in the page is ready
-        page.onCallback = function(bounds)
-        {
-            if (bounds != null)
-            {
-                w = Math.ceil(bounds.x + bounds.width);
-                h = Math.ceil(bounds.y + bounds.height);
-                page.viewportSize = {width: w, height: h};
+page.onError = function(msg, trace) {
 
-                if (format == 'pdf')
-                {
-                    page.paperSize =
-                    {
-                        width: w + 'px',
-                        height: (h + 1) + 'px',
-                        margin: '0px'
-                    };
-                }
-            }
+    var msgStack = ['ERROR: ' + msg];
 
-            // Renders the page as an image (this is not the render function
-            // in the page, it renders the page itself) and kills phantom
-            page.render("/dev/stdout", {format: format, quality: quality});
-            phantom.exit(0);
-        };
-
-        // Invokes the render function in the page which invokes the above callback
-        // when all content in the page has finished rendering (images, mathjax etc)
-        page.evaluate(function(data)
-            {
-                render(data);
-            },
-            {xml: xml, format: format, scale: scale});
+    if (trace && trace.length) {
+        msgStack.push('TRACE:');
+        trace.forEach(function(t) {
+            msgStack.push(' -> ' + t.file + ': ' + t.line + (t.function ? ' (in function "' + t.function +'")' : ''));
+        });
     }
+
+    system.stderr.write(msgStack.join('\n'));
+
+};
+
+page.open(@FILE@, function(status) {
+    if (status !== 'success') {
+        system.stderr.write('Backend could not be loaded\n');
+        phantom.exit(1);
+        return;
+    }
+
+    // Invoked after all content in the page is ready
+    page.onCallback = function(bounds) {
+        if (bounds == null) {
+            system.stderr.write('No bounds returned\n');
+            phantom.exit(1);
+            return;
+        }
+
+        w = Math.ceil(bounds.x + bounds.width);
+        h = Math.ceil(bounds.y + bounds.height);
+
+        page.viewportSize = {width: w, height: h};
+
+        if (format == 'pdf') {
+            page.paperSize = {
+                width: w + 'px',
+                height: (h + 1) + 'px',
+                margin: '0px'
+            };
+        }
+
+        page.render("/dev/stdout", {format: format, quality: quality});
+        phantom.exit(0);
+    };
+
+    // Invokes the render function in the page which invokes the above callback
+    // when all content in the page has finished rendering (images, mathjax etc)
+    page.evaluate(function(data) {
+            render(data);
+        },
+        {xml: xml, format: format, scale: scale});
 });
