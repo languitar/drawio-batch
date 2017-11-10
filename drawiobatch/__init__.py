@@ -93,11 +93,11 @@ def main():
                    args.format,
                    str(args.scale),
                    str(args.quality)]
-        output_data = subprocess.check_output(
+        subprocess.check_call(
             command,
+            stdout=args.output,
             stdin=args.input)
 
-        args.output.write(output_data)
         args.output.close()
 
 
