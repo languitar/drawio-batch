@@ -36,7 +36,7 @@ def parse_arguments():
         help="Output image quality for JPEG and PNG")
 
     parser.add_argument(
-        "--scale",
+        "-s", "--scale",
         default=1,
         type=float,
         help="Scales the output file size for pixel-based output formats")
