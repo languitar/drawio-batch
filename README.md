@@ -27,6 +27,7 @@ python3 setup.py install # with required arguments depending on your setup
 
 This will install a `drawio-batch` script.
 
+There is also an [Archlinux AUR package](https://aur.archlinux.org/packages/drawio-batch/) for this project.
 
 [draw.io]: https://www.draw.io/
 [html-inline]: https://github.com/substack/html-inline
