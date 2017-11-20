@@ -6,6 +6,7 @@ install:
   - export PATH="upstream/bin:$PATH"
   - pip install setuptools
 script:
-  - python3 drawiobatch/__init__.py drawio/war/templates/uml/uml_1.xml out.pdf && file out.pdf | grep 'PDF document'
-  - python3 setup.py install && rm -rf drawiobatch && rm -f out.pdf && drawio-batch drawio/war/templates/uml/uml_1.xml out.pdf && file out.pdf | grep 'PDF document'
+  - cp drawiobatch/drawio/war/templates/uml/uml_1.xml test.xml
+  - python3 drawiobatch/__init__.py test.xml out.pdf && file out.pdf | grep 'PDF document'
+  - python3 setup.py install && rm -rf drawiobatch && rm -f out.pdf && drawio-batch test.xml out.pdf && file out.pdf | grep 'PDF document'
 

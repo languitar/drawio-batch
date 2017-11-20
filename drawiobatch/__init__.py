@@ -88,7 +88,7 @@ def main():
 
     try:
         with tempfile.TemporaryDirectory() as temp_dir:
-            backend = os.path.join(get_resource_dir('drawio'), 'export2.html')
+            backend = os.path.join(get_resource_dir('drawio/war'), 'export2.html')
 
             frontend = os.path.join(temp_dir, 'frontend.js')
             with open(frontend, 'wb') as frontend_file:

@@ -2,7 +2,7 @@ import os.path
 from setuptools import setup, find_packages
 
 def read_version():
-    with open('drawio/VERSION') as version_file:
+    with open('drawiobatch/drawio/VERSION') as version_file:
         return version_file.readlines()[0].strip()
 
 setup(
