@@ -74,31 +74,41 @@ def get_resource(name):
             'drawiobatch', name).read()
 
 
+def get_resource_dir(name):
+    local_path = os.path.join(os.path.dirname(os.path.relpath(__file__)), name)
+    local_path = os.path.abspath(local_path)
+    if os.path.isdir(local_path):
+        return local_path
+    else:
+        return pkg_resources.resource_filename('drawiobatch', name)
+
+
 def main():
     args = parse_arguments()
 
-    with tempfile.TemporaryDirectory() as temp_dir:
-        backend = os.path.join(temp_dir, 'backend.html')
-        with open(backend, 'wb') as backend_file:
-            backend_file.write(get_resource('backend.html'))
+    try:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            backend = os.path.join(get_resource_dir('drawio'), 'export2.html')
 
-        frontend = os.path.join(temp_dir, 'frontend.js')
-        with open(frontend, 'wb') as frontend_file:
-            in_data = get_resource('frontend.js.in')
-            in_data = in_data.replace(b'@FILE@',
-                                      bytearray("'" + backend + "'", 'ASCII'))
-            frontend_file.write(in_data)
+            frontend = os.path.join(temp_dir, 'frontend.js')
+            with open(frontend, 'wb') as frontend_file:
+                in_data = get_resource('frontend.js.in')
+                in_data = in_data.replace(b'@FILE@',
+                                          bytearray("'" + backend + "'", 'ASCII'))
+                frontend_file.write(in_data)
 
-        command = [args.phantomjs.name, frontend,
-                   args.format,
-                   str(args.scale),
-                   str(args.quality)]
-        subprocess.check_call(
-            command,
-            stdout=args.output,
-            stdin=args.input)
+            command = [args.phantomjs.name, frontend,
+                       args.format,
+                       str(args.scale),
+                       str(args.quality)]
+            subprocess.check_call(
+                command,
+                stdout=args.output,
+                stdin=args.input)
 
-        args.output.close()
+            args.output.close()
+    finally:
+        pkg_resources.cleanup_resources()
 
 
 if __name__ == '__main__':

@@ -15,9 +15,8 @@ setup(
 
     packages=find_packages(),
 
-    package_data={
-        '': ['backend.html', 'frontend.js.in']
-    },
+    include_package_data=True,
+    zip_safe=True,
 
     entry_points={
         'console_scripts': [
