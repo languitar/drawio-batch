@@ -2,8 +2,6 @@ language: python
 python:
   - "3.6"
 install:
-  - sudo apt-get install phantomjs
-  - export PATH="upstream/bin:$PATH"
   - pip install setuptools
 script:
   - cp drawiobatch/drawio/war/templates/uml/uml_1.xml test.xml

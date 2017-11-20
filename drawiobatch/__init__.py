@@ -88,23 +88,33 @@ def main():
 
     try:
         with tempfile.TemporaryDirectory() as temp_dir:
-            backend = os.path.join(get_resource_dir('drawio/war'), 'export2.html')
+            backend = os.path.join(get_resource_dir('drawio/war'),
+                                   'export2.html')
 
             frontend = os.path.join(temp_dir, 'frontend.js')
             with open(frontend, 'wb') as frontend_file:
                 in_data = get_resource('frontend.js.in')
-                in_data = in_data.replace(b'@FILE@',
-                                          bytearray("'" + backend + "'", 'ASCII'))
+                in_data = in_data.replace(
+                    b'@FILE@', bytearray("'" + backend + "'", 'ASCII'))
                 frontend_file.write(in_data)
 
-            command = [args.phantomjs.name, frontend,
-                       args.format,
-                       str(args.scale),
-                       str(args.quality)]
-            subprocess.check_call(
-                command,
-                stdout=args.output,
-                stdin=args.input)
+            # chop newlines from input
+            processed_input = os.path.join(temp_dir, 'input')
+            with open(processed_input, 'w') as in_file:
+                data = args.input.readlines()
+                data = [l.strip() for l in data]
+                in_file.write(''.join(data))
+
+            with open(processed_input, 'r') as in_file:
+                command = [args.phantomjs.name,
+                           frontend,
+                           args.format,
+                           str(args.scale),
+                           str(args.quality)]
+                subprocess.check_call(
+                    command,
+                    stdout=args.output,
+                    stdin=in_file)
 
             args.output.close()
     finally:
