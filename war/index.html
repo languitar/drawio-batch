@@ -358,7 +358,7 @@
 		{
 			mxscript('js/app.min.js');
 			
-			if (urlParams['offline'] == '1')
+			if (urlParams['offline'] == '1' || urlParams['appcache'] == '1')
 			{
 				mxscript('js/stencils.min.js');
 			}
