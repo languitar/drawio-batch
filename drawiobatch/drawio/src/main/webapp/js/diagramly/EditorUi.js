@@ -9221,7 +9221,19 @@
 			    						
 			    						if (ref != null)
 			    						{
-			    							select.push(graph.insertEdge(null, null, edge.label || '',
+			    							var label = edge.label;
+			    							
+			    							if (edge.fromlabel != null)
+			    							{
+			    								label = (cell.getAttribute(edge.fromlabel) || '') + (label || '');
+			    							}
+			    							
+			    							if (edge.tolabel != null)
+			    							{
+			    								label = (label || '') + (ref.getAttribute(edge.tolabel) || '');
+			    							}
+			    							
+			    							select.push(graph.insertEdge(null, null, label || '',
 				    							(edge.invert) ? ref : cell, (edge.invert) ? cell : ref,
 								    			edge.style || graph.createCurrentEdgeStyle()));
 			    							mxUtils.remove((edge.invert) ? cell : ref, roots);
@@ -9462,7 +9474,7 @@
 	EditorUi.prototype.showLinkDialog = function(value, btnLabel, fn)
 	{
 		var dlg = new LinkDialog(this, value, btnLabel, fn, true);
-		this.showDialog(dlg.container, 420, 120, true, true);
+		this.showDialog(dlg.container, 440, 130, true, true);
 		dlg.init();
 	};
 
@@ -9576,7 +9588,7 @@
 	/**
 	 * Returns the number of storage options enabled
 	 */
-	EditorUi.prototype.getServiceCount = function(allowBrowser)
+	EditorUi.prototype.getServiceCount = function(allowBrowser, splash)
 	{
 		var serviceCount = 0;
 		
@@ -9585,7 +9597,7 @@
 			serviceCount++
 		}
 		
-		if (this.dropbox != null || typeof window.DropboxClient === 'function')
+		if (!splash && (this.dropbox != null || typeof window.DropboxClient === 'function'))
 		{
 			serviceCount++
 		}
@@ -9595,12 +9607,12 @@
 			serviceCount++
 		}
 		
-		if (this.gitHub != null)
+		if (!splash && (this.gitHub != null))
 		{
 			serviceCount++
 		}
 		
-		if (this.trello != null || typeof window.TrelloClient === 'function')
+		if (!splash && (this.trello != null || typeof window.TrelloClient === 'function'))
 		{
 			serviceCount++
 		}
