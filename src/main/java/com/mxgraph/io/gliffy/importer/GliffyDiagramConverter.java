@@ -40,6 +40,7 @@ import com.mxgraph.online.Utils;
 import com.mxgraph.util.mxDomUtils;
 import com.mxgraph.util.mxPoint;
 import com.mxgraph.util.mxXmlUtils;
+import com.mxgraph.view.mxGraph;
 import com.mxgraph.view.mxGraphHeadless;
 
 /**
@@ -269,25 +270,6 @@ public class GliffyDiagramConverter
 			mxPoints.remove(last);// remove last so it doesn't become a waypoint
 		}
 		
-		//TODO this is temporary until self-loops routing is changed
-		if (startTerminal != null && startTerminal == endTerminal && mxPoints.size() >= 2 /*&& startTerminal.getStyle().indexOf(";rotation=") == -1*/) //special case for self-loops to force correct routing
-		{
-			mxPoint first = mxPoints.get(0);
-			mxPoint last = mxPoints.get(mxPoints.size() - 1);
-			mxGeometry tGeo = startTerminal.getGeometry();
-			StringBuffer style = new StringBuffer(cell.getStyle());
-			style.append("entryPerimeter=0;exitPerimeter=0;exitX=");
-			style.append((first.getX() - tGeo.getX()) / tGeo.getWidth());
-			style.append(";exitY=");
-			style.append((first.getY() - tGeo.getY()) / tGeo.getHeight());
-			style.append(";entryX=");
-			style.append((last.getX() - tGeo.getX()) / tGeo.getWidth());
-			style.append(";entryY=");
-			style.append((last.getY() - tGeo.getY()) / tGeo.getHeight());
-			style.append(";");
-			cell.setStyle(style.toString());
-		}
-
 		if (!mxPoints.isEmpty())
 		{
 			geo.setPoints(mxPoints);
