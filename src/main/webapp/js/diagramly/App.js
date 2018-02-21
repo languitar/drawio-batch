@@ -445,9 +445,11 @@ App.main = function(callback, createUi)
 		/**
 		 * Injects offline dependencies
 		 */
-		if (urlParams['offline'] == '1')
+		if (urlParams['offline'] == '1' || urlParams['appcache'] == '1')
 		{
 			mxscript('js/shapes.min.js');
+			mxscript('js/stencils.min.js');
+			mxscript('js/extensions.min.js');
 			
 			var frame = document.createElement('iframe');
 			frame.setAttribute('width', '0');
@@ -494,7 +496,7 @@ App.main = function(callback, createUi)
 			}
 			else if (urlParams['chrome'] != '0' && !EditorUi.isElectronApp)
 			{
-				mxscript(App.FOOTER_PLUGIN_URL);
+				mxscript(App.FOOTER_PLUGIN_URL, null, null, null, mxClient.IS_SVG);
 			}
 			
 			if (plugins != null && plugins.length > 0 && urlParams['plugins'] != '0')
@@ -537,7 +539,7 @@ App.main = function(callback, createUi)
 			(urlParams['embed'] == '1' && urlParams['gapi'] == '1')) && isSvgBrowser &&
 			isLocalStorage && (document.documentMode == null || document.documentMode >= 10))))
 		{
-			mxscript('https://apis.google.com/js/api.js?onload=DrawGapiClientCallback');
+			mxscript('https://apis.google.com/js/api.js?onload=DrawGapiClientCallback', null, null, null, mxClient.IS_SVG);
 		}
 		// Disables client
 		else if (typeof window.gapi === 'undefined')
@@ -2992,7 +2994,14 @@ EditorUi.prototype.loadTemplate = function(url, onload, onerror)
 	
 	this.loadUrl(realUrl, mxUtils.bind(this, function(data)
 	{
-		if (!this.isOffline() && new XMLHttpRequest().upload && this.isRemoteFileFormat(data, url))
+		if  (/(\.vsdx)($|\?)/i.test(url))
+		{
+			this.importVisio(this.base64ToBlob(data.substring(data.indexOf(',') + 1)), function(xml)
+			{
+				onload(xml);
+			});
+		}
+		else if (!this.isOffline() && new XMLHttpRequest().upload && this.isRemoteFileFormat(data, url))
 		{
 			// Asynchronous parsing via server
 			this.parseFile(new Blob([data], {type: 'application/octet-stream'}), mxUtils.bind(this, function(xhr)
@@ -3013,7 +3022,7 @@ EditorUi.prototype.loadTemplate = function(url, onload, onerror)
 			
 			onload(data);
 		}
-	}), onerror, /(\.png)($|\?)/i.test(url));
+	}), onerror, /(\.png)($|\?)/i.test(url) || /(\.vsdx)($|\?)/i.test(url));
 };
 
 /**
@@ -3645,19 +3654,61 @@ App.prototype.restoreLibraries = function()
 			delete this.pendingLibraries[id];
 		});
 				
-		var load = mxUtils.bind(this, function(libs)
+		var load = mxUtils.bind(this, function(libs, done)
 		{
+			var waiting = 0;
+			var files = [];
+
+			// Loads in order of libs array
+			var checkDone = mxUtils.bind(this, function()
+			{
+				if (waiting == 0)
+				{
+					for (var i = libs.length - 1; i >= 0; i--)
+					{
+						if (files[i] != null)
+						{
+							this.loadLibrary(files[i]);
+						}
+					}
+					
+					if (done != null)
+					{
+						done();
+					}
+				}
+			});
+			
 			if (libs != null)
 			{
 				for (var i = 0; i < libs.length; i++)
 				{
 					var name = encodeURIComponent(decodeURIComponent(libs[i]));
 					
-					(mxUtils.bind(this, function(id)
+					(mxUtils.bind(this, function(id, index)
 					{
 						if (id != null && id.length > 0 && this.pendingLibraries[id] == null &&
 							this.sidebar.palettes[id] == null)
 						{
+							// Waits for all libraries to load
+							waiting++;
+							
+							var onload = mxUtils.bind(this, function(file)
+							{
+
+								delete this.pendingLibraries[id];
+								files[index] = file;
+								waiting--;
+								checkDone();
+							});
+							
+							var onerror = mxUtils.bind(this, function()
+							{
+								ignore(id);
+								waiting--;
+								checkDone();
+							});
+							
 							this.pendingLibraries[id] = true;
 							var service = id.substring(0, 1);
 							
@@ -3665,30 +3716,35 @@ App.prototype.restoreLibraries = function()
 							{
 								if (isLocalStorage || mxClient.IS_CHROMEAPP)
 								{
-									try
+									// Make asynchronous for barrier to work
+									window.setTimeout(mxUtils.bind(this, function()
 									{
-										var name = decodeURIComponent(id.substring(1));
-										var xml = this.getLocalData(name, mxUtils.bind(this, function(xml)
+										try
 										{
-											if (name == '.scratchpad' && xml == null)
-											{
-												xml = this.emptyLibraryXml;
-											}
+											var name = decodeURIComponent(id.substring(1));
 											
-											if (xml != null)
+											var xml = this.getLocalData(name, mxUtils.bind(this, function(xml)
 											{
-												this.loadLibrary(new StorageLibrary(this, xml, name));
-											}
-											else
-											{
-												ignore(id);
-											}
-										}));
-									}
-									catch (e)
-									{
-										ignore(id);
-									}
+												if (name == '.scratchpad' && xml == null)
+												{
+													xml = this.emptyLibraryXml;
+												}
+												
+												if (xml != null)
+												{
+													onload(new StorageLibrary(this, xml, name));
+												}
+												else
+												{
+													onerror();
+												}
+											}));
+										}
+										catch (e)
+										{
+											onerror();
+										}
+									}), 0);
 								}
 							}
 							else if (service == 'U')
@@ -3705,29 +3761,35 @@ App.prototype.restoreLibraries = function()
 										realUrl = PROXY_URL + '?url=' + encodeURIComponent(url) + '&' + nocache;
 									}
 									
-									// Uses proxy to avoid CORS issues
-									mxUtils.get(realUrl, mxUtils.bind(this, function(req)
+									try
 									{
-										if (req.getStatus() >= 200 && req.getStatus() <= 299)
+										// Uses proxy to avoid CORS issues
+										mxUtils.get(realUrl, mxUtils.bind(this, function(req)
 										{
-											try
+											if (req.getStatus() >= 200 && req.getStatus() <= 299)
 											{
-												this.loadLibrary(new UrlLibrary(this, req.getText(), url));
-												delete this.pendingLibraries[id];
+												try
+												{
+													onload(new UrlLibrary(this, req.getText(), url));
+												}
+												catch (e)
+												{
+													onerror();
+												}
 											}
-											catch (e)
+											else
 											{
-												ignore(id);
+												onerror();
 											}
-										}
-										else
+										}), function()
 										{
-											ignore(id);
-										}
-									}), function()
+											onerror();
+										});
+									}
+									catch (e)
 									{
-										ignore(id);
-									});
+										onerror();
+									}
 								}
 							}
 							else
@@ -3776,31 +3838,39 @@ App.prototype.restoreLibraries = function()
 									{
 										try
 										{
-											this.loadLibrary(file);
-											delete this.pendingLibraries[id];
+											onload(file);
 										}
 										catch (e)
 										{
-											ignore(id);
+											onerror();
 										}
 									}), function(resp)
 									{
-										ignore(id);
+										onerror();
 									});
 								}
 								else
 								{
 									delete this.pendingLibraries[id];
+									onerror();
 								}
 							}
 						}
-					}))(name);
+					}))(name, i);
 				}
+				
+				checkDone();
+			}
+			else
+			{
+				checkDone();
 			}
 		});
 		
-		load(mxSettings.getCustomLibraries());
-		load((urlParams['clibs'] || '').split(';'));
+		load(mxSettings.getCustomLibraries(), function()
+		{
+			load((urlParams['clibs'] || '').split(';'));
+		});
 	}
 };
 
@@ -4264,21 +4334,11 @@ App.prototype.convertFile = function(url, filename, mimeType, extension, success
 			{
 				blob = new Blob([req.response], {type: 'application/octet-stream'});
 			}
-
-			this.parseFile(blob, mxUtils.bind(this, function(xhr)
+			
+			this.importVisio(blob, mxUtils.bind(this, function(xml)
 			{
-				if (xhr.readyState == 4)
-				{
-					if (xhr.status >= 200 && xhr.status <= 299)
-					{
-						success(new LocalFile(this, xhr.responseText, name, true));
-					}
-					else if (error != null)
-					{
-						error({message: mxResources.get('errorLoadingFile')});
-					}
-				}
-			}), filename);
+				success(new LocalFile(this, xml, name, true));
+			}), error)
 		});
 
 		req.send();

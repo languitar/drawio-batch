@@ -198,20 +198,13 @@
 		}
 		.geFooterContainer div.geSocialFooter a img {
 			margin-top:10px;
-			opacity:0.8;
+			opacity:0.5;
 		}
 		.geFooterContainer div.geSocialFooter a img:hover {
 			opacity:1;
 		}
-		#geFooterItem1 {
-			background-color: #cdcdcd;
-		}
-		#geFooterItem1:hover {
-			background-color: #b0b0b0;
-		}		
-		.geFooterContainer>div>img {
+		.geFooterContainer>div#geFooter>img {
 			opacity:0.5;
-			background:#e5e5e5;
 			border:1px solid transparent;
 			cusor:pointer;
 			margin-top:3px;
@@ -222,7 +215,7 @@
 			padding:1px;
 			cursor:pointer;
 		}
-		.geFooterContainer>div>img:hover {
+		.geFooterContainer>div#geFooter>img:hover {
 			opacity: 1;
 		}
 	</style>
@@ -243,9 +236,9 @@
 		/**
 		 * Synchronously adds scripts to the page.
 		 */
-		function mxscript(src, onLoad, id, dataAppKey)
+		function mxscript(src, onLoad, id, dataAppKey, noWrite)
 		{
-			if (onLoad != null)
+			if (onLoad != null || noWrite)
 			{
 				var s = document.createElement('script');
 				s.setAttribute('type', 'text/javascript');
@@ -262,14 +255,17 @@
 					s.setAttribute('data-app-key', dataAppKey);
 				}
 				
-				s.onload = s.onreadystatechange = function()
+				if (onLoad != null)
 				{
-					if (!r && (!this.readyState || this.readyState == 'complete'))
+					s.onload = s.onreadystatechange = function()
 					{
-			      		r = true;
-			      		onLoad();
-					}
-			  	};
+						if (!r && (!this.readyState || this.readyState == 'complete'))
+						{
+				      		r = true;
+				      		onLoad();
+						}
+				  	};
+				}
 			  	
 			  	var t = document.getElementsByTagName('script')[0];
 			  	t.parentNode.insertBefore(s, t);
@@ -341,18 +337,12 @@
 		else
 		{
 			mxscript('js/app.min.js');
-			
-			if (urlParams['offline'] == '1' || urlParams['appcache'] == '1')
-			{
-				mxscript('js/stencils.min.js');
-			}
 		}
 
+		// Electron
 		if (window && window.process && window.process.type)
 		{
-			// Electron
 			mxscript('js/diagramly/ElectronApp.js');
-			mxscript('js/diagramly/Extensions.js');
 		}
 		
 		// Adds basic error handling
@@ -401,12 +391,12 @@
 	</div>
 	<table align="center" height="100%">
 		<tr>
-			<td id="geFooterItem2" align="center" style="width:246px;">
+			<td id="geFooterItem2" align="center" style="width:280px;transition: all 1s ease;">
 				<a title="Quick Start Video" href="https://www.youtube.com/watch?v=Z0D96ZikMkc" target="_blank">
-					<img border="0" align="absmiddle" style="margin-top:-2px;padding-right:8px;"
-						width="26" height="26" src="images/youtube.png"/>Quick Start Video</a>
+					<img border="0" align="absmiddle" style="margin-top:-4px;padding-right:10px;"
+						width="26" height="20" src="images/youtube.png"/>Quick Start Video</a>
 			</td>
-			<td id="geFooterItem1" align="center" style="width:282px;">
+			<td id="geFooterItem1" align="center" style="width:260px;">
 				<a id="geFooterLink1" title="#1 Rated Confluence Add-on" target="_blank"
 					href="https://about.draw.io/integrations/confluence-integration/">
 					<img border="0" width="24" height="24" align="absmiddle" style="padding-right:10px;"

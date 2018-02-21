@@ -13,6 +13,8 @@ DriveClient = function(editorUi)
 
 	if (this.ui.editor.chromeless && urlParams['rt'] != '1')
 	{
+		// Workaround for Google Drive requiring the user to click on the file in the
+		// drive UI when not using this scope (user other scope with rt=1 URL param)
 		this.appId = '850530949725';
 		this.clientId = '850530949725.apps.googleusercontent.com';
 		this.scopes = ['https://www.googleapis.com/auth/drive.readonly', 'openid'];
@@ -271,11 +273,14 @@ DriveClient.prototype.execute = function(fn)
 				var msg = mxResources.get('cannotLogin');
 				
 				// Handles special domain policy errors
-				if (resp != null && resp.error != null && resp.error.code == 403 &&
-					resp.error.data != null && resp.error.data.length > 0 &&
-					resp.error.data[0].reason == 'domainPolicy')
+				if (resp != null && resp.error != null)
 				{
-					msg = resp.error.message;
+					if (resp.error.code == 403 &&
+							resp.error.data != null && resp.error.data.length > 0 &&
+							resp.error.data[0].reason == 'domainPolicy')
+					{
+						msg = resp.error.message;
+					}
 				}
 				
 				this.ui.drive.clearUserId();
@@ -452,6 +457,11 @@ DriveClient.prototype.authorize = function(immediate, success, error, remember)
 			else if (error != null)
 			{
 				error(resp);
+				
+				if (!this.ui.isOffline())
+				{
+					this.ui.logEvent({category: 'Error', action: 'open', label: JSON.stringify(resp)})
+				}
 			}
 
 			this.resetTokenRefresh(resp);
