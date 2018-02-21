@@ -1,3 +1,89 @@
+17-FEB-2018: 8.2.2
+
+- Fixes inconsistency in child change codec
+- Allows for 0.5px steps when moving cells
+- Uses mxGraph 3.9.2 beta 10
+
+16-FEB-2018: 8.2.1
+
+- Adds shape group in Misc section, outline connect
+- Fixes line wrapping, hides icons while editing
+- Preserves library order for clibs parameter
+- Uses mxGraph 3.9.2 beta 9
+
+16-FEB-2018: 8.2.0
+
+- Confluence Cloud attachment fixes
+
+16-FEB-2018: 8.1.9
+
+- Fixes Google API load timing issues
+- Fixes attachment write calls for IE and Edge in Confluence Cloud
+
+14-FEB-2018: 8.1.8
+
+- Fixes saving diagram to Confluence Cloud draft pages
+
+14-FEB-2018: 8.1.7
+
+- Fixes custom style path for atlas.css
+
+14-FEB-2018: 8.1.6
+
+- Fixes block resize in graph viewer
+- Disables fix for block alignment
+- Uses mxGraph 3.9.2 beta 8
+
+13-FEB-2018: 8.1.5
+
+- Uses mxGraph 3.9.2 beta 7
+
+12-FEB-2018: 8.1.4
+
+- Fixes sidebar tooltip
+
+12-FEB-2018: 8.1.3
+
+- Fixes dynamic loading for VSDX export
+- Fixes possible NPEs in VSDX export
+
+12-FEB-2018: 8.1.2
+
+- Adds resize option in image dialog
+- Uses mxGraph 3.9.2 beta 6
+
+11-FEB-2018: 8.1.1
+
+- Handles markup is invalid XML
+
+11-FEB-2018: 8.1.0
+
+- Adds VSDX/VSSX import/export for Electron
+- Fixes access denied for Dropbox import
+- Fixes escaping in SVG alternate text
+- Uses mxGraph 3.9.2 beta 5
+
+09-FEB-2018: 8.0.9
+
+- Fixes block alignment for in-place editor
+- Uses mxGraph 3.9.2 beta 4
+
+08-FEB-2018: 8.0.8
+
+- Fixes plantUML SVG insert in IE11
+- Adds cors URL parameter
+
+06-FEB-2018: 8.0.7
+
+- Adds recent/search in Confluence connect
+- Fixes various bugs
+
+02-FEB-2018: 8.0.6
+
+- Fixes Ctrl+connect of orthogonal edges
+- Fixes CSS for metadata dialog
+- Uses mxGraph 3.9.2 beta 3
+
 01-FEB-2018: 8.0.5
 
 - Fixes possible NPE for cache invalidation

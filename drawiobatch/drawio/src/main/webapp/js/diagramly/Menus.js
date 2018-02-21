@@ -704,31 +704,7 @@
 		
 		editorUi.actions.put('exportVsdx', new Action(mxResources.get('formatVsdx') + ' (beta)...', function()
 		{
-			var delayed = mxUtils.bind(this, function()
-			{
-				// Checks for signature method
-				if (typeof(VsdxExport) !== 'undefined')
-				{
-					try
-					{
-						new VsdxExport(editorUi).exportCurrentDiagrams();
-					}
-					catch (e)
-					{
-						// ignore
-					}
-				}
-			});
-			
-			if (typeof(VsdxExport) === 'undefined' && !this.loadingVsdx && !editorUi.isOffline())
-			{
-				this.loadingVsdx = true;
-				mxscript('js/vsdx.min.js', delayed);
-			}
-			else
-			{
-				window.setTimeout(delayed, 0);
-			}
+			editorUi.exportVisio();
 		}));
 		
 		// Adds language menu to options only if localStorage is available for
@@ -1329,7 +1305,7 @@
 
 			editorUi.actions.addAction('plugins...', function()
 			{
-				editorUi.showDialog(new PluginsDialog(editorUi).container, 360, 156, true, false);
+				editorUi.showDialog(new PluginsDialog(editorUi).container, 360, 170, true, false);
 			});
 		}
 		
@@ -1918,7 +1894,7 @@
 				else
 				{
 					// Creates a copy with no predefined storage
-					editorUi.editor.editAsNew(editorUi.getEditBlankXml(), title);
+					editorUi.editor.editAsNew(this.editorUi.getFileData(true), title);
 				}
 			}
 		}));

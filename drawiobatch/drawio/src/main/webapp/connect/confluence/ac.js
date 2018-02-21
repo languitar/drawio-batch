@@ -12,7 +12,7 @@ AC.autoExit = true;
 // Last Checked on 08-AUG-2017: No delete scope needed to delete drafts
 // LATER: If delete scope is needed users must upgrade to the latest json
 // Disabled. Flag to mute notifications for drafts is needed. 16-AUG-2017
-AC.draftEnabled = false;
+AC.draftEnabled = true; //Enabled with the new save that mute notifications for saving TODO is there notification for deleting a draft?
 
 AC.getUrlParam = function(param, escape, url){
     try{
@@ -26,9 +26,46 @@ AC.getUrlParam = function(param, escape, url){
     }
 };
 
+AC.getSpaceKey = function(url)
+{
+    try{
+        var url = url || window.location.href;
+        var regex = new RegExp(/\/(spaces|space)\/([^\/]+)/);
+        return regex.exec(url)[2];
+    } catch (e){
+        return undefined;
+    }
+};
+
 AC.getMetaTag = function(name) {
 	return document.getElementsByTagName('meta')[name].getAttribute('content');
 }
+
+//Code from: https://stackoverflow.com/questions/16245767/creating-a-blob-from-a-base64-string-in-javascript
+AC.b64toBlob = function(b64Data, contentType, sliceSize, isByteCharacters) 
+{
+	  contentType = contentType || '';
+	  sliceSize = sliceSize || 512;
+
+	  var byteCharacters = isByteCharacters? b64Data : atob(b64Data);
+	  var byteArrays = [];
+
+	  for (var offset = 0; offset < byteCharacters.length; offset += sliceSize) {
+	    var slice = byteCharacters.slice(offset, offset + sliceSize);
+
+	    var byteNumbers = new Array(slice.length);
+	    for (var i = 0; i < slice.length; i++) {
+	      byteNumbers[i] = slice.charCodeAt(i);
+	    }
+
+	    var byteArray = new Uint8Array(byteNumbers);
+
+	    byteArrays.push(byteArray);
+	  }
+
+	  var blob = new Blob(byteArrays, {type: contentType});
+	  return blob;
+  }
 
 AC.initAsync = function(baseUrl)
 {
@@ -74,6 +111,7 @@ AC.initAsync = function(baseUrl)
 	var filename = null;
 	var theMacroData = null;
 	var pageId = null;
+	var draftPage = false;
 	var theLocation = null;
 	var attachments = null;
 
@@ -94,7 +132,7 @@ AC.initAsync = function(baseUrl)
 	{
 		if (initReceived && xmlReceived != null && draftHandled && !waitingForAttachments)
 		{
-			AC.init(baseUrl, theLocation, pageId, editor, filename, xmlReceived, draftName, draftXml, theMacroData);
+			AC.init(baseUrl, theLocation, pageId, editor, filename, xmlReceived, draftName, draftXml, theMacroData, draftPage);
 		}
 	};
 	
@@ -216,6 +254,7 @@ AC.initAsync = function(baseUrl)
 			    	if (data != null && data.target != null && data.context!= null &&
 			    		(data.target == 'contentedit' || data.target == 'contentcreate'))
 			    	{
+			    		draftPage = (data.target == 'contentcreate');
 			    		pageId = data.context.contentId;
 			    	}
 
@@ -383,7 +422,7 @@ AC.initAsync = function(baseUrl)
 	});
 };
 
-AC.init = function(baseUrl, location, pageId, editor, diagramName, initialXml, draftName, draftXml, macroData)
+AC.init = function(baseUrl, location, pageId, editor, diagramName, initialXml, draftName, draftXml, macroData, draftPage)
 {
 	// Hides the logo
 	document.body.style.backgroundImage = 'none';
@@ -416,7 +455,7 @@ AC.init = function(baseUrl, location, pageId, editor, diagramName, initialXml, d
 	   		//console.trace('DRAFT: Save', draftName, xml);
 	   		
 			AC.saveDiagram(pageId, draftName,
-				btoa(unescape(encodeURIComponent(xml))),
+				xml,
 				function(res)
 				{
 					var obj = null;
@@ -452,12 +491,25 @@ AC.init = function(baseUrl, location, pageId, editor, diagramName, initialXml, d
 				function(res)
 				{
 					//console.trace('DRAFT: Save error');
+					var obj = null;
 					
-					if (err != null)
+					try
 					{
-						err(obj);
+						obj = JSON.parse(res);
 					}
-				}, false, 'text/plain', 'Created by Draw.io');
+					catch (e)
+					{
+						// ignore
+					}
+					
+					if (obj != null && obj.error != null)
+					{
+						if (err != null)
+						{
+							err(obj);
+						}
+					}
+				}, false, 'text/plain', 'Created by Draw.io', false, draftPage);
 	   	};
 	   	
 		function showTemplateDialog()
@@ -468,7 +520,7 @@ AC.init = function(baseUrl, location, pageId, editor, diagramName, initialXml, d
 			}
 			else
 			{
-				editor.contentWindow.postMessage(JSON.stringify({action: 'template'}), '*');
+				editor.contentWindow.postMessage(JSON.stringify({action: 'template', enableRecent: true, enableSearch: true}), '*');
 			}
 		};
 		
@@ -629,54 +681,268 @@ AC.init = function(baseUrl, location, pageId, editor, diagramName, initialXml, d
 						}
 					}	
 				}
+				else if (drawMsg.event == 'searchDocs')
+				{
+					//since we don't use a unique file extension for draw.io diagrams, we need to find pages having draw.io macro also
+					//So, two search requests are needed
+					AP.require('request', function(request) {
+						request({
+							//TODO this query can be enhanced to get part of the name matching but the problem is with the png!
+							url: '/rest/api/content/search?cql=' + encodeURIComponent('type=attachment and (title ~ "' + drawMsg.searchStr + '" or title ~ "' + drawMsg.searchStr + '.png")') + '&limit=100', //limit is 100 and the pages limit is 50 since each diagram has two attachments (and we assume one diagram per page) 
+							success: function(resp) 
+							{
+								resp = JSON.parse(resp);
+								var retList = [];
+								var list = resp.results; 
+								if (list)
+								{
+									var attMap = {};
+									//convert the list to map so we can search by name effeciently
+									for (var i = 0; i < list.length; i++)
+									{
+										//key is pageId + | + att name
+										var pageId = list[i]["_links"]["webui"].match(/pages\/(\d+)/);
+										
+										if (pageId != null)
+										{
+											attMap[pageId[1] + '|' + list[i].title] = {att: list[i], pageId: pageId[1]};
+										}
+									}
+
+									//TODO confirm that the attachments are in a page having draw.io macro
+									for (var key in attMap) 
+									{
+										var att = attMap[key];
+										
+										if (attMap[key+'.png']) //each draw.io attachment should have an associated png preview
+										{
+											//We cannot get the latest version info, it can searched when a diagram is selected
+											retList.push({
+												title: att.att.title,
+												url: "/download/attachments/" + att.pageId + "/"
+													+ encodeURIComponent(att.att.title),
+												info: {
+													id: att.att.id, 
+													pageId: att.pageId 
+												},
+												imgUrl: baseUrl + "/download/attachments/" + att.pageId + "/"
+													+ encodeURIComponent(att.att.title)
+													+ ".png?api=v2"
+											});
+										}
+									}
+									editor.contentWindow.postMessage(JSON.stringify({action: 'searchDocsList',
+										list: retList}), '*');
+								}
+							},
+							error : function(resp) 
+							{
+								editor.contentWindow.postMessage(JSON.stringify({action: 'searchDocsList',
+									list: [], errorMsg: "Network Error!"}), '*');
+							}
+						});
+					});
+
+				}
+				else if (drawMsg.event == 'recentDocs')
+				{
+					//since we don't use a unique file extension for draw.io diagrams, we need to find pages having draw.io macro also
+					//So, two search requests are needed
+					AP.require('request', function(request) {
+						request({
+							url: '/rest/api/content/search?cql=type=attachment%20and%20lastmodified%3E%20startOfDay(%22-7d%22)&limit=100', //cql= type=attachment and lastmodified > startOfDay("-7d") //modified in the last 7 days
+																																		   //limit is 100 and the pages limit is 50 since each diagram has two attachments (and we assume one diagram per page) 
+							success: function(resp) 
+							{
+								resp = JSON.parse(resp);
+								var retList = [];
+								var list = resp.results; 
+								if (list)
+								{
+									var attMap = {};
+									//convert the list to map so we can search by name effeciently
+									for (var i = 0; i < list.length; i++)
+									{
+										//key is pageId + | + att name
+										var pageId = list[i]["_links"]["webui"].match(/pages\/(\d+)/);
+										
+										if (pageId != null)
+										{
+											attMap[pageId[1] + '|' + list[i].title] = {att: list[i], pageId: pageId[1]};
+										}
+									}
+
+									//confirm that the attachments are in a page having draw.io macro
+									request({
+										url: '/rest/api/content/search?cql=macro=drawio%20and%20lastmodified%3E%20startOfDay(%22-7d%22)&limit=50', //cql= macro=drawio and lastmodified > startOfDay("-7d") //modified in the last 7 days
+										success: function(resp) 
+										{
+											resp = JSON.parse(resp);
+											var pages = {};
+											var list = resp.results; 
+											if (list)
+											{
+												for (var i = 0; i < list.length; i++)
+												{
+													pages[list[i].id] = list[i];
+												}
+											}
+											
+											
+											for (var key in attMap) 
+											{
+												var att = attMap[key];
+												
+												if (attMap[key+'.png'] && pages[att.pageId] != null) //each draw.io attachment should have an associated png preview
+												{
+													//We cannot get the latest version info, it can searched when a diagram is selected
+													retList.push({
+														title: att.att.title,
+														url: "/download/attachments/" + att.pageId + "/"
+															+ encodeURIComponent(att.att.title),
+														info: {
+															id: att.att.id, 
+															pageId: att.pageId
+														},
+														imgUrl: baseUrl + "/download/attachments/" + att.pageId + "/"
+														+ encodeURIComponent(att.att.title)
+														+ ".png?api=v2"
+													});
+												}
+											}
+											editor.contentWindow.postMessage(JSON.stringify({action: 'recentDocsList',
+												list: retList}), '*');
+										},
+										error : function(resp) 
+										{
+											editor.contentWindow.postMessage(JSON.stringify({action: 'recentDocsList',
+												list: [], errorMsg: "Network Error!"}), '*');
+										}
+									});
+								}
+							},
+							error : function(resp) 
+							{
+								editor.contentWindow.postMessage(JSON.stringify({action: 'recentDocsList',
+									list: [], errorMsg: "Network Error!"}), '*');
+							}
+						});
+					});
+
+					
+				}
 				else if (drawMsg.event == 'template')
 				{
 					editor.contentWindow.postMessage(JSON.stringify({action: 'spinner',
 						show: true, messageKey: 'inserting'}), '*');
 					
-					checkName(drawMsg.name, function(name)
+					if (drawMsg.docUrl)
 					{
-						editor.contentWindow.postMessage(JSON.stringify({action: 'spinner',
-							show: false}), '*');
-						diagramName = name;
-
-						if (AC.draftEnabled)
+						checkName(drawMsg.name, function(name)
 						{
-							draftName = '~drawio~' + user + '~' + diagramName + AC.draftExtension;
-							editor.contentWindow.postMessage(JSON.stringify({action: 'spinner',
-								show: true, messageKey: 'inserting'}), '*');
+							diagramName = name;
 							
-							saveDraft(drawMsg.xml, function()
+							AP.require('request', function(request) {
+								
+								var loadTemplate = function(version)
+								{
+									request({
+										url: drawMsg.docUrl + (version != null? "?version=" + version : ""),
+										success: function(xml) 
+										{
+											editor.contentWindow.postMessage(JSON.stringify({action: 'load',
+												autosave: 1, xml: xml, title: diagramName}), '*');
+											editor.contentWindow.postMessage(JSON.stringify({action: 'spinner',
+												show: false}), '*');
+										},
+										error : function(resp) 
+										{
+											editor.contentWindow.postMessage(JSON.stringify({action: 'spinner',
+												show: false}), '*');
+											editor.contentWindow.postMessage(JSON.stringify({action: 'dialog',
+												titleKey: 'error', message: "Diagram cannot be loaded", messageKey: null,
+												buttonKey: 'ok'}), '*');
+										}
+									});
+								}
+								
+								request({
+									url: '/rest/api/content/' + drawMsg.info.id,
+									success: function(resp) 
+									{
+										resp = JSON.parse(resp);
+										
+										try
+										{
+											loadTemplate(resp.version.number);
+										}
+										catch(e)
+										{
+											loadTemplate();
+										}
+									},
+									error : function(resp) 
+									{
+										loadTemplate();
+									}
+								});
+							});
+						},
+						function(name, err, errKey)
+						{
+							editor.contentWindow.postMessage(JSON.stringify({action: 'spinner',
+								show: false}), '*');
+							editor.contentWindow.postMessage(JSON.stringify({action: 'dialog',
+								titleKey: 'error', message: err, messageKey: errKey,
+								buttonKey: 'ok'}), '*');
+						});
+					}
+					else
+					{
+						checkName(drawMsg.name, function(name)
+						{
+							editor.contentWindow.postMessage(JSON.stringify({action: 'spinner',
+								show: false}), '*');
+							diagramName = name;
+	
+							if (AC.draftEnabled)
 							{
-								editor.contentWindow.postMessage(JSON.stringify({action: 'spinner', show: false}), '*');
+								draftName = '~drawio~' + user + '~' + diagramName + AC.draftExtension;
+								editor.contentWindow.postMessage(JSON.stringify({action: 'spinner',
+									show: true, messageKey: 'inserting'}), '*');
+								
+								saveDraft(drawMsg.xml, function()
+								{
+									editor.contentWindow.postMessage(JSON.stringify({action: 'spinner', show: false}), '*');
+									editor.contentWindow.postMessage(JSON.stringify({action: 'load',
+										autosave: 1, xml: drawMsg.xml, title: diagramName}), '*');
+								},
+								function()
+								{
+									editor.parentNode.removeChild(editor);
+									var message = messages.error('Draft Write Error', 'Draft could not be created');
+				    		
+				    				messages.onClose(message, function()
+				    				{
+				    					confluence.closeMacroEditor();
+				    				});
+								});
+							}
+							else
+							{
 								editor.contentWindow.postMessage(JSON.stringify({action: 'load',
 									autosave: 1, xml: drawMsg.xml, title: diagramName}), '*');
-							},
-							function()
-							{
-								editor.parentNode.removeChild(editor);
-								var message = messages.error('Draft Write Error', 'Draft could not be created');
-			    		
-			    				messages.onClose(message, function()
-			    				{
-			    					confluence.closeMacroEditor();
-			    				});
-							});
-						}
-						else
+							}
+						},
+						function(name, err, errKey)
 						{
-							editor.contentWindow.postMessage(JSON.stringify({action: 'load',
-								autosave: 1, xml: drawMsg.xml, title: diagramName}), '*');
-						}
-					},
-					function(name, err, errKey)
-					{
-						editor.contentWindow.postMessage(JSON.stringify({action: 'spinner',
-							show: false}), '*');
-						editor.contentWindow.postMessage(JSON.stringify({action: 'dialog',
-							titleKey: 'error', message: err, messageKey: errKey,
-							buttonKey: 'ok'}), '*');
-					});
+							editor.contentWindow.postMessage(JSON.stringify({action: 'spinner',
+								show: false}), '*');
+							editor.contentWindow.postMessage(JSON.stringify({action: 'dialog',
+								titleKey: 'error', message: err, messageKey: errKey,
+								buttonKey: 'ok'}), '*');
+						});
+					}
 				}
 				else if (drawMsg.event == 'autosave')
 				{
@@ -706,7 +972,7 @@ AC.init = function(baseUrl, location, pageId, editor, diagramName, initialXml, d
 				}
 				else if (drawMsg.event == 'save')
 				{
-					diagramXml = btoa(unescape(encodeURIComponent(drawMsg.xml)));
+					diagramXml = drawMsg.xml;
 					
 					if (diagramName == null)
 					{
@@ -798,9 +1064,10 @@ AC.init = function(baseUrl, location, pageId, editor, diagramName, initialXml, d
 
 						// LATER: Get revision from metadata of attachment and check
 						// what condition makes the response not contain an URL
-						if (resp != null && resp.url != null)
+						//TODO Is prev comment still needed with REST API?
+						if (resp != null && resp.results != null && resp.results[0])
 						{
-							revision = resp.url.match(/version=(\d+)/i)[1];
+							revision = resp.results[0].version.number;
 						}
 						else
 						{
@@ -861,8 +1128,8 @@ AC.init = function(baseUrl, location, pageId, editor, diagramName, initialXml, d
 
 						if (diagramName != null) 
 						{
-							AC.saveDiagram(pageId, diagramName + '.png', imageData,
-								successPng, saveError, false, 'image/png');
+							AC.saveDiagram(pageId, diagramName + '.png', AC.b64toBlob(imageData, 'image/png'),
+								successPng, saveError, false, 'image/png', 'draw.io preview', false, draftPage);
 						}
 					};
 
@@ -872,7 +1139,7 @@ AC.init = function(baseUrl, location, pageId, editor, diagramName, initialXml, d
 							show: true, messageKey: 'saving'}), '*');
 						
 						AC.saveDiagram(pageId, diagramName, diagramXml,
-							successXml, saveError, false, 'text/plain');
+							successXml, saveError, false, 'text/plain', 'draw.io diagram', false, draftPage, true);
 					}
 				}
 			}
@@ -929,17 +1196,9 @@ AC.loadDiagram = function (pageId, diagramName, revision, success, error, owning
 	});
 };
 
-AC.saveDiagram = function(pageId, diagramName, xml, success, error, newSave, mime, comment) 
+//TODO We can upload both the diagram and its png in one call if needed?
+AC.saveDiagram = function(pageId, diagramName, xml, success, error, newSave, mime, comment, sendNotif, draftPage, addCustomContent) 
 {
-	var attachment = {fileName: diagramName, contentType: mime};
-	
-	if (comment != null)
-	{
-		attachment.comment = comment;
-	}
-	
-	var params = [pageId, attachment, xml];
-	
 	loadSucess = function(resp) 
 	{
 		error({status: 409, message: 'File already exists'});
@@ -963,7 +1222,7 @@ AC.saveDiagram = function(pageId, diagramName, xml, success, error, newSave, mim
 		{
 			var obj = JSON.parse(responseText);
 			
-			if (obj != null && obj.code == -32600)
+			if (obj != null && obj.code == -32600) //TODO is the codes the same with new REST APIs 
 			{
 				error({status: 401});
 				
@@ -976,19 +1235,105 @@ AC.saveDiagram = function(pageId, diagramName, xml, success, error, newSave, mim
 	
 	doSave = function() 
 	{
-		// Workaround for encoding problems
-		var data = JSON.stringify(params);
-
 		AP.require(['request'], function(request) 
 		{
-			request({
-				type: 'POST',
-				data: data,
-				url: '/rpc/json-rpc/confluenceservice-v2/addAttachment',
-				contentType: 'application/json;charset=UTF-8',
-				success: sessionCheck,
+			 var attFile = (xml instanceof Blob)? xml : new Blob([xml], {type: mime});
+			 attFile.name = diagramName;
+			 
+			 var reqData = {file: attFile, minorEdit: sendNotif? false : true};
+			 var draft = draftPage ? "?status=draft" : "";
+
+			 if (comment != null)
+			 {
+				 reqData.comment = comment;
+			 }
+			 
+			 request({
+				type: 'PUT',
+				data: reqData,
+				url:  "/rest/api/content/"+ pageId +"/child/attachment" + draft,
+				contentType: "multipart/form-data",
+				success: function (resp)
+                {
+                   /* var attObj = JSON.parse(resp);
+					if (addCustomContent && attObj.results && attObj.results[0])
+					{
+						var spaceKey = AC.getSpaceKey(attObj.results[0]._expandable.space);
+						//First, check if we already have a custom content related to this attachment
+						//Names are not unique, so should check first to decide: add or update
+						 request({
+		                        type: 'GET',
+		                        url:  "/rest/api/search?cql=" + encodeURIComponent('creator=currentUser() and type="ac:com.mxgraph.confluence.plugins.diagramly:drawio-diagram"' +
+		                        		' and title="'+diagramName+'" and space="' + spaceKey + '"') + '&limit=100', //I don't think there could be more than 100 diagrams with the same name!
+		                        contentType: "application/json",
+	                        success: function(resp) 
+	                        {
+	                            resp = JSON.parse(resp);
+	                            var list = resp.list;
+	                            
+	                            if (list && list.length > 0)
+	                            {
+	                            	//We need to fetch each one to find out the page id
+	                            	for (var i = 0; i < list.length; i++)
+                            		{
+	                            		
+                            		}
+	                            }
+	                            else //just add it
+                            	{
+                            	
+                            	}
+	                        },
+	                        error: error //TODO is this correct??
+	                    });
+	                    
+	                    var customObj = {
+	                         "type": "ac:com.mxgraph.confluence.plugins.diagramly:drawio-diagram",
+	                         "space": {
+	                            "key": spaceKey
+	                          },
+	                          "container": {
+                        	    "type": "page",
+                        	    "id": pageId
+                        	  },
+	                          "title": diagramName,
+	                          "body": {
+	                            "storage": {
+	                              "value": "",
+	                              "representation": "storage"
+	                            }
+	                          },
+	                          "metadata": {
+	                            "properties": {
+	                              "diagram-data": {
+	                                "key": "diagram-data",
+	                                "value": {
+	                                  "attId": attObj.id,
+	                                  "pageId": pageId,
+	                                  "diagramName": diagramName,
+	                                  "version": attObj.results[0].version? attObj.results[0].version.number : ""
+	                                } 
+	                              }
+	                            }
+	                          }
+	                    };
+	                    
+	                    request({
+	                        type: 'POST',
+	                        data: JSON.stringify(customObj),
+	                        url:  "/rest/api/content/",
+	                        contentType: "application/json",
+	                        success: function(resp) 
+	                        {
+	                            //TODO We can ignore the resp??
+	                        },
+	                        error: error //TODO is this correct??
+	                    });
+					}*/
+                    sessionCheck(resp);
+                },
 				error: error
-			});
+			 });
 		});
 	};
 	
@@ -1045,3 +1390,41 @@ AC.getMacroData = function(fn) {
 		confluence.getMacroData(fn);
 	});
 }
+
+//From mxUtils
+AC.htmlEntities = function(s, newline)
+{
+	s = String(s || '');
+	
+	s = s.replace(/&/g,'&amp;'); // 38 26
+	s = s.replace(/"/g,'&quot;'); // 34 22
+	s = s.replace(/\'/g,'&#39;'); // 39 27
+	s = s.replace(/</g,'&lt;'); // 60 3C
+	s = s.replace(/>/g,'&gt;'); // 62 3E
+
+	if (newline == null || newline)
+	{
+		s = s.replace(/\n/g, '&#xa;');
+	}
+	
+	return s;
+};
+
+AC.fromHtmlEntities = function(s, newline)
+{
+	s = String(s || '');
+	
+	s = s.replace(/&amp;/g,'&'); // 38 26
+	s = s.replace(/&quot;/g,'"'); // 34 22
+	s = s.replace(/&#39;/g,'\\'); // 39 27
+	s = s.replace(/&lt;/g,'<'); // 60 3C
+	s = s.replace(/&gt;/g,'>'); // 62 3E
+
+	if (newline == null || newline)
+	{
+		s = s.replace(/&#xa;/g, '\n');
+	}
+	
+	return s;
+};
+
