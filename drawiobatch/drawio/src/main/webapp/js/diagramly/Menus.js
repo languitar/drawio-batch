@@ -70,7 +70,7 @@
 		var trelloEnabled = ((urlParams['embed'] != '1' && urlParams['tr'] != '0') || (urlParams['embed'] == '1' && urlParams['tr'] == '1')) &&
 			mxClient.IS_SVG && (document.documentMode == null || document.documentMode > 9);
 
-		if (!editorUi.isOffline())
+		if (!mxClient.IS_SVG && !editorUi.isOffline())
 		{
 			var img = new Image();
 			img.src = IMAGE_PATH + '/help.png';
@@ -682,7 +682,7 @@
 		{
 			if (this.findWindow == null)
 			{
-				this.findWindow = new FindWindow(editorUi, document.body.offsetWidth - 300, 110, 204, 140);
+				this.findWindow = new FindWindow(editorUi, document.body.offsetWidth - 300, 110, 240, 140);
 				this.findWindow.window.addListener('show', function()
 				{
 					editorUi.fireEvent(new mxEventObject('find'));
@@ -2523,22 +2523,11 @@
 
 			if (!editorUi.isOfflineApp() && urlParams['embed'] != '1')
 			{
-				var item = this.addMenuItem(menu, 'plugins', parent);
-				
-				if (!editorUi.isOffline() || mxClient.IS_CHROMEAPP)
-				{
-					this.addLinkToItem(item, 'https://desk.draw.io/support/solutions/articles/16000056430');
-				}
+				this.addMenuItem(menu, 'plugins', parent);
 			}
 				
 			menu.addSeparator(parent);
-			var item = this.addMenuItem(menu, 'tags', parent);
-			
-			if (!editorUi.isOffline())
-			{
-				this.addLinkToItem(item, 'https://desk.draw.io/support/solutions/articles/16000046966');
-			}
-
+			this.addMenuItem(menu, 'tags', parent);
 			menu.addSeparator(parent);
 
 			if (!editorUi.isOffline() && !navigator.standalone && urlParams['embed'] != '1')

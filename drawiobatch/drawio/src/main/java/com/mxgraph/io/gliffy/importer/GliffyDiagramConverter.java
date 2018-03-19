@@ -9,6 +9,7 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Comparator;
+import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -37,9 +38,12 @@ import com.mxgraph.io.gliffy.model.Graphic.GliffyShape;
 import com.mxgraph.io.gliffy.model.Graphic.GliffySvg;
 import com.mxgraph.model.mxCell;
 import com.mxgraph.model.mxGeometry;
+import com.mxgraph.model.mxIGraphModel;
 import com.mxgraph.online.Utils;
+import com.mxgraph.util.mxConstants;
 import com.mxgraph.util.mxDomUtils;
 import com.mxgraph.util.mxPoint;
+import com.mxgraph.util.mxUtils;
 import com.mxgraph.util.mxXmlUtils;
 import com.mxgraph.view.mxGraphHeadless;
 
@@ -161,10 +165,18 @@ public class GliffyDiagramConverter
 
 		if (obj.hasChildren())
 		{
-			if (!obj.isSwimlane())
+			// sort the children except for swimlanes
+			// their order value is "auto"
+			if (obj.isSwimlane())
 			{
-				// sort the children except for swimlanes
-				// their order value is "auto"
+				// rotated swimlane child order is inverse
+				if (obj.rotation != 0)
+				{
+					Collections.reverse(obj.children);
+				}
+			}
+			else
+			{
 				sortObjectsByOrder(obj.children);
 			}
 
@@ -275,6 +287,85 @@ public class GliffyDiagramConverter
 	 * @param startTerminal starting point
 	 * @param endTerminal ending point
 	 */
+	private String getStyle(mxCell cell, String key, String defaultValue)
+	{
+		String style = cell.getStyle();
+		
+		if (style != null && style.length() > 0)
+		{
+			String[] pairs = style.split(";");
+
+			for (int i = 0; i < pairs.length; i++)
+			{
+				String tmp = pairs[i];
+				int c = tmp.indexOf('=');
+
+				if (c >= 0 && tmp.substring(0, c).equalsIgnoreCase(key))
+				{
+					return tmp.substring(c + 1);
+				}
+			}
+		}
+		
+		return defaultValue;
+	};
+	
+	private boolean addConstraint(GliffyObject object, mxCell terminal, boolean source, boolean orthogonal)
+	{
+		Constraints cons = object.getConstraints();
+		Constraint con = (cons != null) ? ((source) ? cons.getStartConstraint() :
+			cons.getEndConstraint()) : null;
+		ConstraintData data = (con != null) ?  ((source) ? con.getStartPositionConstraint() :
+			con.getEndPositionConstraint()) : null;
+
+		if (data != null)
+		{
+			String direction = getStyle(terminal, mxConstants.STYLE_DIRECTION, "east");
+			mxPoint temp = new mxPoint(data.getPx(), data.getPy());
+			int rotation = 0;
+			
+			if (direction.equalsIgnoreCase("south"))
+			{
+				rotation = 270;
+			}
+			else if (direction.equalsIgnoreCase("west"))
+			{
+				rotation = 180;
+			}
+			else if (direction.equalsIgnoreCase("north"))
+			{
+				rotation = 90;
+			}
+			
+			if (rotation != 0)
+			{
+				double rad = Math.toRadians(rotation);
+				
+				temp = mxUtils.getRotatedPoint(temp, Math.cos(rad), Math.sin(rad), new mxPoint(0.5, 0.5));
+			}
+			
+			if (!orthogonal || (temp.getX() == 0.5 && temp.getY() == 0.5))
+			{
+				mxCell cell = object.getMxObject();
+				cell.setStyle(cell.getStyle() +
+						((source) ? "exitX=" : "entryX=") + temp.getX() + ";" +
+						((source) ? "exitY=" : "entryY=") + temp.getY() + ";" +
+						((source) ? "exitPerimeter=0" : "entryPerimeter=0") + ";");
+			}
+			
+			return true;
+		}
+		
+		return orthogonal;
+	};
+	
+	/**
+	 * Sets the waypoints
+	 * 
+	 * @param object Gliffy line
+	 * @param startTerminal starting point
+	 * @param endTerminal ending point
+	 */
 	private void setWaypoints(GliffyObject object, mxCell startTerminal, mxCell endTerminal)
 	{
 		mxCell cell = object.getMxObject();
@@ -306,19 +397,87 @@ public class GliffyDiagramConverter
 			
 			mxPoints.add(waypoint);
 		}
+		
+		// Analyze waypoints
+		boolean orthogonal = true;
 
+		mxPoint p0 = mxPoints.get(0);
+		mxPoint pe = mxPoints.get(mxPoints.size() - 1);
+		
+		Iterator<mxPoint> it = mxPoints.iterator();
+		mxPoint last = it.next();
+		
+		while (it.hasNext())
+		{
+			mxPoint current = it.next();
+			
+			orthogonal = orthogonal && (last.getX() == current.getX() || last.getY() == current.getY());
+			
+			last = current;
+		}
+		
 		if (startTerminal == null)
 		{
-			mxPoint first = mxPoints.get(0);
-			geo.setTerminalPoint(first, true);
-			mxPoints.remove(first);// remove first so it doesn't become a waypoint
+			geo.setTerminalPoint(p0, true);
+			mxPoints.remove(p0);// remove first so it doesn't become a waypoint
+		}
+		else
+		{
+			// Do not add constraint for orthogonal edges
+			if (addConstraint(object, startTerminal, true, orthogonal))
+			{
+				mxPoints.remove(p0);
+			}
 		}
 
 		if (endTerminal == null)
 		{
-			mxPoint last = mxPoints.get(mxPoints.size() - 1);
-			geo.setTerminalPoint(last, false);
-			mxPoints.remove(last);// remove last so it doesn't become a waypoint
+			geo.setTerminalPoint(pe, false);
+			mxPoints.remove(pe);// remove last so it doesn't become a waypoint
+		}
+		else
+		{
+			// Do not add constraint for orthogonal edges
+			if (addConstraint(object, endTerminal, false, orthogonal))
+			{
+				mxPoints.remove(pe);
+			}
+		}
+		
+		if (orthogonal)
+		{
+			cell.setStyle(cell.getStyle() + "edgeStyle=orthogonalEdgeStyle;");
+			List<mxPoint> result = new ArrayList<mxPoint>();
+			
+			// Removes duplicate waypoints
+			if (mxPoints.size() > 0)
+			{
+				it = mxPoints.iterator();
+				last = it.next();
+				
+				result.add(last);
+				
+				while (it.hasNext())
+				{
+					mxPoint current = it.next();
+					
+					if (last.getX() != current.getX() || last.getY() != current.getY())
+					{
+						result.add(current);
+					}
+					
+					last = current;
+				}
+			}
+			else if ((startTerminal == null && endTerminal != null) || (endTerminal == null && startTerminal != null))
+			{
+				// Adds control points to fix floating connection point
+				mxPoint center = new mxPoint(p0.getX() + (pe.getX() - p0.getX()) / 2, p0.getY() + (pe.getY() - p0.getY()) / 2); 
+				result.add(center);
+				result.add(center);
+			}
+
+			mxPoints = result;
 		}
 		
 		if (!mxPoints.isEmpty())
@@ -327,7 +486,6 @@ public class GliffyDiagramConverter
 		}
 
 		drawioDiagram.getModel().setGeometry(cell, geo);
-
 	}
 
 	/**
@@ -339,6 +497,17 @@ public class GliffyDiagramConverter
 	{
 		if (layers == null)
 			return;
+		
+		// Removes empty default layer
+		if (layers.size() > 0)
+		{
+			mxIGraphModel model = drawioDiagram.getModel();
+			
+			if (model.getChildCount(model.getRoot()) > 0)
+			{
+				model.remove(model.getChildAt(model.getRoot(), 0));
+			}
+		}
 		
 		for (GliffyLayer layer : layers)
 		{
@@ -596,7 +765,7 @@ public class GliffyDiagramConverter
 
 				GliffyShape gs = gLane.graphic.getShape();
 				StringBuilder laneStyle = new StringBuilder();
-				laneStyle.append("swimlane;swimlaneLine=0;");
+				laneStyle.append("swimlane;collapsible=0;swimlaneLine=0;");
 				laneStyle.append("strokeWidth=" + gs.strokeWidth).append(";");
 				laneStyle.append("shadow=" + (gs.dropShadow ? 1 : 0)).append(";");
 				laneStyle.append("fillColor=" + gs.fillColor).append(";");
@@ -677,25 +846,12 @@ public class GliffyDiagramConverter
 					String tmp = m.replaceFirst("rotation=" + rotation.toString());
 					style.setLength(0);
 					style.append(tmp);
-
-					//handles a specific case where draw.io triangle needs to have an initial rotation of -90 to match that of Gliffy
-					//in this case, width and height are swapped and x and y are updated
-					if (style.lastIndexOf("swapwidthandheight") != -1) 
-					{
-						geometry.setX(geometry.getX() + (geometry.getWidth() - geometry.getHeight()) / 2);
-						geometry.setY(geometry.getY() + + (geometry.getHeight() - geometry.getWidth()) / 2);
-						
-						double w = geometry.getWidth();
-						double h = geometry.getHeight();
-						geometry.setWidth(h);
-						geometry.setHeight(w);
-					}
 				}
 			}
 			else if (gliffyObject.rotation != 0)
 			{
 				//handling the special common case
-				if (style.indexOf("swimlane;") > -1 && gliffyObject.rotation == 270) {
+				if (style.indexOf("swimlane;collapsible=0;") > -1 && gliffyObject.rotation == 270) {
 					double w = geometry.getWidth();
 					double h = geometry.getHeight();
 					geometry.setX(geometry.getX() + (w - h) / 2);
