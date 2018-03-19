@@ -1023,24 +1023,27 @@ var com;
                                             cell = this_1.addUnconnectedEdge(shapeGraph, null, shape, 1169);
                                         }
                                         if (cell != null) {
-                                            /* append */ (function (sb) { return sb.str = sb.str.concat(comma_1); })(shapes_1);
-                                            /* append */ (function (sb) { return sb.str = sb.str.concat("{\"xml\":\""); })(shapes_1);
                                             var geo_1 = this_1.normalizeGeo(cell);
                                             this_1.sanitiseGraph(shapeGraph);
                                             if (shapeGraph.getModel().getChildCount(shapeGraph.getDefaultParent()) === 0)
                                                 return "continue";
+                                            /* append */ (function (sb) { return sb.str = sb.str.concat(comma_1); })(shapes_1);
+                                            /* append */ (function (sb) { return sb.str = sb.str.concat("{\"xml\":\""); })(shapes_1);
                                             var shapeXML_1 = _super.prototype.processPage.call(this_1, shapeGraph, null);
                                             /* append */ (function (sb) { return sb.str = sb.str.concat(shapeXML_1); })(shapes_1);
                                             /* append */ (function (sb) { return sb.str = sb.str.concat("\",\"w\":"); })(shapes_1);
                                             /* append */ (function (sb) { return sb.str = sb.str.concat(geo_1.width); })(shapes_1);
                                             /* append */ (function (sb) { return sb.str = sb.str.concat(",\"h\":"); })(shapes_1);
                                             /* append */ (function (sb) { return sb.str = sb.str.concat(geo_1.height); })(shapes_1);
-                                            /* append */ (function (sb) { return sb.str = sb.str.concat(",\"title\":\""); })(shapes_1);
+                                            /* append */ (function (sb) { return sb.str = sb.str.concat(",\"title\":"); })(shapes_1);
                                             var shapeName_1 = master.getName();
-                                            if (shapeName_1 != null)
-                                                shapeName_1 = com.mxgraph.io.vsdx.mxVsdxUtils.htmlEntities(shapeName_1);
+                                            if (shapeName_1 == null)
+                                        	{
+                                            	shapeName_1 = "";
+                                        	}
+                                            shapeName_1 = JSON.stringify(shapeName_1);
                                             /* append */ (function (sb) { return sb.str = sb.str.concat(shapeName_1); })(shapes_1);
-                                            /* append */ (function (sb) { return sb.str = sb.str.concat("\"}"); })(shapes_1);
+                                            /* append */ (function (sb) { return sb.str = sb.str.concat("}"); })(shapes_1);
                                             comma_1 = ",";
                                         }
                                     }

@@ -12,28 +12,50 @@
     "links": {
         "documentation": "https://support.draw.io/display/DFCC/draw.io+for+Confluence+Cloud"
     },
-    "version": "2.0.0",
+    "version": "1.4.8",
     "authentication": 
     {
         "type": "none"
     },
     "modules": 
     {
-		"adminPages": [
-			{
-                "key": "gliffyImport",
-                "url": "/connect/confluence/admin.html",
-                "name": {
-                    "value": "Gliffy - draw.io Conversion"
-                }
-            }
-		],
 		"generalPages": [
             {
                 "key": "lightbox",
-                "url": "/connect/confluence/viewer2.html?lightbox=1",
+                "url": "/connect/confluence/viewer-1-4-8.html?lightbox=1",
                 "name": {
                     "value": "Lightbox"
+                }
+            },
+            {
+                "key": "customContentViewer",
+                "url": "/connect/confluence/viewer-1-4-8.html?custom=1&contentId={content.id}",
+                "name": {
+                    "value": "Draw.io Viewer"
+                }
+            }
+        ],
+        "customContent": [{
+                "key": "drawio-diagram",
+                "name": {
+                    "value": "Draw.io Diagrams"
+                },
+                "uiSupport": {
+                    "contentViewComponent": {
+                        "moduleKey": "customContentViewer"
+                    },
+                    "icons": {
+                        "item": {
+                            "url": "/images/drawlogo48.png"
+                        }
+                    }
+                },
+                "apiSupport": {
+                    "supportedContainerTypes": ["page", "comment", "space", "blogpost"],
+                    "supportedChildTypes": ["attachment"],
+                    "indexing": {
+                        "enabled": true
+                    }
                 }
             }
         ],
@@ -45,7 +67,7 @@
                     "i18n": "drawioMacro",
                     "value": "Draw.io Diagram"
                 },
-                "url": "/connect/confluence/viewer2.html?ceoId=${page.id}&diagramName=${diagramName}&revision=${revision}&width=${width}&height=${height}&tbstyle=${tbstyle}&lbox=${lbox}&zoom=${zoom}&links=${links}&owningPageId=${pageId}",
+                "url": "/connect/confluence/viewer-1-4-8.html?ceoId=${page.id}&diagramName=${diagramName}&revision=${revision}&width=${width}&height=${height}&tbstyle=${tbstyle}&lbox=${lbox}&zoom=${zoom}&links=${links}&owningPageId=${pageId}",
                 "width": "100%",
                 "description": 
                 {
@@ -115,7 +137,7 @@
 				    }
   				],
   				"editor": {
-				    "url": "/connect/confluence/macroEditor.html?ceoId=${page.id}&diagramName=${diagramName}",
+				    "url": "/connect/confluence/macroEditor-1-4-8.html?ceoId=${page.id}&diagramName=${diagramName}",
 				    "width": "100%",
 				    "height": "100%",
 				    "editTitle":

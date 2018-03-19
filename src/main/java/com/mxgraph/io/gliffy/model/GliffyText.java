@@ -35,8 +35,12 @@ public class GliffyText implements PostDeserializer.PostDeserializable
 	private boolean forceTopPaddingShift = false;
 	
 	private static Pattern pattern = Pattern.compile("<p(.*?)<\\/p>");
+	
+	private static Pattern spanPattern = Pattern.compile("<span style=\"(.*?)\">");
 
 	private static Pattern textAlign = Pattern.compile(".*(text-align: ?(left|center|right);).*", Pattern.DOTALL);
+
+	private static Pattern lineHeight = Pattern.compile(".*(line-height: .*px;).*", Pattern.DOTALL);
 
 	public GliffyText()
 	{
@@ -97,10 +101,23 @@ public class GliffyText implements PostDeserializer.PostDeserializable
 			if (halign != null)
 			{
 				sb.append("align=").append(halign).append(";");
+
+				if (halign.equalsIgnoreCase("right"))
+				{
+					// Workaround for word wrapping where no wrapping occurs in Gliffy is to
+					// make room for additional chars if we know the alignment ignores x
+					x = 0;
+				}
 			}
-			else 
+			else
+			{
 				sb.append("align=center;");
+			}
 		}
+
+		// Removes default global spacing (workaround for unwanted line wrapping)
+		paddingLeft = Math.max(0, paddingLeft - 2);
+		paddingRight = Math.max(0, paddingRight - 2);
 
 		sb.append("spacingLeft=").append(paddingLeft + x).append(";");
 		sb.append("spacingRight=").append(paddingRight).append(";");
@@ -124,7 +141,43 @@ public class GliffyText implements PostDeserializer.PostDeserializable
 		StringBuilder sb = new StringBuilder();
 		while (m.find())
 		{
-			sb.append("<div" + m.group(1) + "</div>");
+			// Adds line-height:0 to empty spans with no line-height
+			// to match quirks mode sizing in standards mode
+			sb.append("<div");
+			String str = m.group(1);
+			Matcher m2 = spanPattern.matcher(str);
+			int last = 0;
+			
+			while (m2.find())
+			{
+				String span = str.substring(last, m2.end());
+				String style = m2.group(1);
+				
+				if (style != null)
+				{
+					Matcher m3 = lineHeight.matcher(style);
+					
+					if (!m3.find())
+					{
+						if (str.substring(m2.end(), m2.end() + 5).equalsIgnoreCase("<span"))
+						{
+							span = span.substring(0, m2.end(1) - last) + " line-height: 0;" + span.substring(m2.end(1) - last);
+						}
+						else
+						{
+							// Overrides line-height with default value in child span elements
+							span = span.substring(0, m2.end(1) - last) + " line-height: normal;" + span.substring(m2.end(1) - last);
+						}
+					}
+				}
+
+				last = m2.end();
+				sb.append(span);
+			}
+			
+
+			sb.append(str.substring(last));
+			sb.append("</div>");
 		}
 
 		return sb.length() > 0 ? sb.toString() : html;

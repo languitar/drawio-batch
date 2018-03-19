@@ -64,7 +64,12 @@
 	/**
 	 * Broken image symbol for offline SVG.
 	 */
-	EditorUi.prototype.svgBrokenImage = Graph.createSvgImage(10, 10, '<rect x="0" y="0" width="10" height="10" stroke="#000" fill="transparent"/><path d="m 0 0 L 10 10 L 0 10 L 10 0" stroke="#000" fill="transparent"/>');svrc =
+	EditorUi.prototype.svgBrokenImage = Graph.createSvgImage(10, 10, '<rect x="0" y="0" width="10" height="10" stroke="#000" fill="transparent"/><path d="m 0 0 L 10 10 L 0 10 L 10 0" stroke="#000" fill="transparent"/>');
+
+	/**
+	 * Specifies if img.crossOrigin is supported. This is true for all browsers except IE10 and earlier.
+	 */
+	EditorUi.prototype.crossOriginImages = !mxClient.IS_IE;
 	
 	/**
 	 * Defines the maximum size for images.
@@ -182,9 +187,10 @@
 	/**
 	 * Hook for subclassers.
 	 */
-	EditorUi.prototype.openLink = function(url)
+	EditorUi.prototype.openLink = function(url, target)
 	{
-		return window.open(url);
+		// LATER: Replace this with direct calls to graph
+		return this.editor.graph.openLink(url, target);
 	};
 
 	/**
@@ -1419,7 +1425,15 @@
 		
 		return result;
 	};
-
+	
+	/**
+	 * Adds empty implementation
+	 */
+	EditorUi.prototype.descriptorChanged = function()
+	{
+		// empty
+	};
+	
 	/**
 	 * Updates action states depending on the selection.
 	 */
@@ -2884,7 +2898,7 @@
 			null, null, (count > 4) ? 3 : 4, data, mimeType, base64Encoded);
 		var noServices = (mxClient.IS_IOS) ? 0 : 1;
 		var height = (count == noServices) ? 160 : ((count > 4) ? 390 : 270);
-		this.showDialog(dlg.container, 380, height, true, true);
+		this.showDialog(dlg.container, 420, height, true, true);
 		dlg.init();
 	};
 	
@@ -3786,7 +3800,7 @@
 				linkSection.getColor(), fit.checked, allPages.checked, layers.checked, lightbox.checked,
 				editSection.getLink());
 		}), null, btnLabel, helpLink);
-		this.showDialog(dlg.container, 340, 360, true, true);
+		this.showDialog(dlg.container, 340, 384, true, true);
 		copyRadio.focus();
 	};
 	
@@ -3935,7 +3949,7 @@
 				layers.checked, (widthInput != null) ? widthInput.value : null,
 				(heightInput != null) ? heightInput.value : null);
 		}), null, mxResources.get('create'), helpLink);
-		this.showDialog(dlg.container, 340, 246 + dy, true, true);
+		this.showDialog(dlg.container, 340, 254 + dy, true, true);
 		
 		if (widthInput != null)
 		{
@@ -3996,7 +4010,7 @@
 		var div = document.createElement('div');
 		div.style.whiteSpace = 'nowrap';
 		var graph = this.editor.graph;
-		var height = (format == 'jpeg') ? 170 : 280;
+		var height = (format == 'jpeg') ? 196 : 300;
 		
 		var hd = document.createElement('h3');
 		mxUtils.write(hd, title);
@@ -4119,7 +4133,7 @@
 			callback(zoomInput.value, transparent.checked, !selection.checked, shadow.checked,
 				include.checked, cb5.checked, borderInput.value, cb6.checked, !allPages.checked);
 		}), null, btnLabel, helpLink);
-		this.showDialog(dlg.container, 320, height, true, true);
+		this.showDialog(dlg.container, 340, height, true, true);
 		zoomInput.focus();
 		
 		if (mxClient.IS_GC || mxClient.IS_FF || document.documentMode >= 5 || mxClient.IS_QUIRKS)
@@ -5025,8 +5039,7 @@
 		var converter = new mxUrlConverter();
 		converter.updateBaseUrl();
 
-		// Extends convert to avoid CORS using an image proxy server
-		// LATER: Use img.crossOrigin="anonymous" to avoid proxy
+		// Extends convert to avoid CORS using an image proxy server where needed
 		var convert = converter.convert;
 		var self = this;
 		
@@ -5040,7 +5053,8 @@
 				{
 					src = self.svgBrokenImage.src;
 				}
-				else if (remote && src.substring(0, converter.baseUrl.length) != converter.baseUrl)
+				else if (remote && src.substring(0, converter.baseUrl.length) != converter.baseUrl &&
+						(!self.crossOriginImages || !self.isCorsEnabledForUrl(src)))
 				{
 					src = PROXY_URL + '?url=' + encodeURIComponent(src);
 				}
@@ -5234,6 +5248,7 @@
 			url.substring(0, 34) === 'https://raw.githubusercontent.com/' ||
 			url.substring(0, 23) === 'https://cdn.rawgit.com/' ||
 			url.substring(0, 19) === 'https://rawgit.com/' ||
+			/^https?:\/\/[^\/]*\.iconfinder.com\//.test(url) ||
 			/^https?:\/\/[^\/]*\.github\.io\//.test(url);
 	};
 
@@ -5260,6 +5275,11 @@
 		{
 		    var img = new Image();
 		    var self = this;
+		    
+		    if (this.crossOriginImages)
+		    	{
+			    img.crossOrigin = 'anonymous';
+		    }	
 		    
 		    img.onload = function()
 		    {
@@ -5692,11 +5712,11 @@
 						var graph = this.editor.graph;
 						var cell = null;
 						
-				    	graph.getModel().beginUpdate();
-				    	try
-				    	{
-				    		// Fires cellsInserted to apply the current style to the inserted text.
-				    		// This requires the value to be empty when the event is fired.
+					    	graph.getModel().beginUpdate();
+					    	try
+					    	{
+					    		// Fires cellsInserted to apply the current style to the inserted text.
+					    		// This requires the value to be empty when the event is fired.
 							cell = graph.insertVertex(graph.getDefaultParent(), null, '',
 									graph.snap(dx), graph.snap(dy), 1, 1, 'text;' + ((html) ? 'html=1;' : ''));
 							graph.fireEvent(new mxEventObject('textInserted', 'cells', [cell]));
@@ -5716,11 +5736,11 @@
 							// Adds spacing
 							cell.geometry.width += graph.gridSize;
 							cell.geometry.height += graph.gridSize;
-				    	}
-				    	finally
-				    	{
-				    		graph.getModel().endUpdate();
-				    	}
+					    	}
+					    	finally
+					    	{
+					    		graph.getModel().endUpdate();
+					    	}
 						
 						return [cell];
 					}
@@ -6681,6 +6701,11 @@
 			}
 		};
 		
+		graph.addListener('pageLinkClicked', function(sender, evt)
+		{
+			pageLinkClicked(evt.getProperty('href'));
+		});
+		
 		// Passes current page to editor window
 		var editorGetEditBlankUrl = ui.editor.getEditBlankUrl;
 		
@@ -6842,9 +6867,12 @@
 				!mxEvent.isPopupTrigger(evt)))
 			{
 				// Active links are moved to the hint
-				if (!graph.isEnabled())
+				if (!graph.isEnabled() || (state != null && graph.isCellLocked(state.cell)))
 				{
 					pageLinkClicked(href);
+					
+					// Resets rubberband after click on locked cell
+					graph.getRubberband().reset();
 				}
 				
 				mxEvent.consume(evt);
