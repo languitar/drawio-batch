@@ -2,7 +2,3 @@ language: node_js
 node_js:
   - "lts/*"
   - "node"
-script:
-  - cp ./drawio/src/main/webapp/templates/uml/uml_1.xml test.xml
-  - ./drawio-batch.js test.xml out.pdf && file out.pdf | grep 'PDF document'
-

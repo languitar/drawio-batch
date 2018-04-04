@@ -12,7 +12,7 @@
   },
   "devDependencies": {},
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "node drawio-batch.js ./drawio/src/main/webapp/templates/uml/uml_1.xml test.pdf && file test.pdf | grep 'PDF document'"
   },
   "repository": {
     "type": "git",
