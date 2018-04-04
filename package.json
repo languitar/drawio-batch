@@ -1,0 +1,29 @@
+{
+  "name": "drawio-batch",
+  "version": "1.0.0",
+  "description": "A command line converter for drawio diagrams",
+  "main": "index.js",
+  "dependencies": {
+    "commander": "^2.15.1",
+    "puppeteer": "^1.2.0"
+  },
+  "devDependencies": {},
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+ssh://git@github.com/languitar/drawio-batch.git"
+  },
+  "keywords": [
+    "command",
+    "line",
+    "drawio"
+  ],
+  "author": "Johannes Wienke",
+  "license": "LGPL-3.0+",
+  "bugs": {
+    "url": "https://github.com/languitar/drawio-batch/issues"
+  },
+  "homepage": "https://github.com/languitar/drawio-batch#readme"
+}
