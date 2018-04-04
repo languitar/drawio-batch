@@ -2,7 +2,7 @@
   "name": "drawio-batch",
   "version": "8.5.3",
   "description": "A command line converter for drawio diagrams",
-  "main": "drawio-batch.js",
+  "bin": "drawio-batch.js",
   "dependencies": {
     "commander": "^2.15.1",
     "puppeteer": "^1.2.0"
@@ -19,7 +19,7 @@
     "url": "git+ssh://git@github.com/languitar/drawio-batch.git"
   },
   "keywords": [
-    "command ling",
+    "command line",
     "drawio"
   ],
   "author": "Johannes Wienke",
