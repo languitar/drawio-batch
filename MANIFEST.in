@@ -1,4 +1,0 @@
-recursive-exclude drawiobatch/drawio *
-include drawiobatch/drawio/VERSION
-recursive-include drawiobatch/drawio/src/main/webapp *
-include drawiobatch/frontend.js.in
