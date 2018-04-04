@@ -52,9 +52,10 @@ function sleep (ms) {
   const browser = await puppeteer.launch({args: ['--no-sandbox']})
 
   try {
+    await input
     const page = await browser.newPage()
 
-    await page.goto('file:///home/languitar/src/drawio-batch/drawiobatch/drawio/src/main/webapp/export2.html')
+    await page.goto('file://' + __dirname + '/drawio/src/main/webapp/export2.html')
     var bounds = await page.evaluate(function (xml, format, scale) {
       return new Promise(function (resolve, reject) {
         window.callPhantom = function (bounds) {

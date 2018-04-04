@@ -1,10 +1,8 @@
-language: python
-python:
-  - "3.6"
-install:
-  - pip install setuptools
+language: node_js
+node_js:
+  - "lts/*"
+  - "node"
 script:
-  - cp ./drawiobatch/drawio/src/main/webapp/templates/uml/uml_1.xml test.xml
-  - python3 drawiobatch/__init__.py test.xml out.pdf && file out.pdf | grep 'PDF document'
-  - python3 setup.py install && rm -rf drawiobatch && rm -f out.pdf && drawio-batch test.xml out.pdf && file out.pdf | grep 'PDF document'
+  - cp ./drawio/src/main/webapp/templates/uml/uml_1.xml test.xml
+  - ./drawio-batch.js test.xml out.pdf && file out.pdf | grep 'PDF document'
 
