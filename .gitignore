@@ -4,3 +4,5 @@
 /dist
 *.egg-info
 *.pyc
+/node_modules
+/.mypy_cache

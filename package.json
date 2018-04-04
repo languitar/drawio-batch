@@ -1,0 +1,31 @@
+{
+  "name": "drawio-batch",
+  "version": "8.5.3",
+  "description": "A command line converter for drawio diagrams",
+  "bin": "drawio-batch.js",
+  "dependencies": {
+    "commander": "^2.15.1",
+    "puppeteer": "^1.2.0"
+  },
+  "pkg": {
+    "assets": "drawio/**/*"
+  },
+  "devDependencies": {},
+  "scripts": {
+    "test": "node drawio-batch.js ./drawio/src/main/webapp/templates/uml/uml_1.xml test.pdf && file test.pdf | grep 'PDF document'"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+ssh://git@github.com/languitar/drawio-batch.git"
+  },
+  "keywords": [
+    "command line",
+    "drawio"
+  ],
+  "author": "Johannes Wienke",
+  "license": "LGPL-3.0+",
+  "bugs": {
+    "url": "https://github.com/languitar/drawio-batch/issues"
+  },
+  "homepage": "https://github.com/languitar/drawio-batch"
+}
