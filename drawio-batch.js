@@ -35,6 +35,8 @@ program
     'output image quality for JPEG and PNG (0..100)', parseQuality, 75)
   .option('-s --scale <scale>',
     'scales the output file size for pixel-based output formats', parseScale, 1.0)
+  .option('-d --diagramId <diagramId>',
+    'selects a specific diagram', parseInt, 0)
   .arguments('<input> <output>')
   .action(function (newInput, newOutput) {
     input = fs.readFileSync(newInput, 'utf-8')
@@ -56,14 +58,14 @@ function sleep (ms) {
     const page = await browser.newPage()
 
     await page.goto('file://' + __dirname + '/drawio/src/main/webapp/export2.html')
-    var bounds = await page.evaluate(function (xml, format, scale) {
+    var bounds = await page.evaluate(function (xml, format, scale, diagramId) {
       return new Promise(function (resolve, reject) {
         window.callPhantom = function (bounds) {
           resolve(bounds)
         }
-        render({xml: xml, format: format, scale: scale})
+        render({xml: xml, format: format, scale: scale, from: diagramId})
       })
-    }, input, program.format, program.scale)
+    }, input, program.format, program.scale, program.diagramId)
 
     var width = Math.ceil(bounds.x + bounds.width)
     var height = Math.ceil(bounds.y + bounds.height)
