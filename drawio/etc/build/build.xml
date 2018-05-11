@@ -125,6 +125,7 @@
 				<file name="Sidebar-GCP.js" />
 				<file name="Sidebar-Gmdl.js" />
 				<file name="Sidebar-IBM.js" />
+				<file name="Sidebar-Infographic.js" />
 				<file name="Sidebar-Ios.js" />
 				<file name="Sidebar-Ios7.js" />
 				<file name="Sidebar-LeanMapping.js" />
@@ -185,6 +186,7 @@
 				<file name="EditorUi.js" />
 				<file name="Pages.js" />
 				<file name="Trees.js" />
+				<file name="Minimal.js" />
 			</sources>
 					
 			<sources dir="${basedir}">
@@ -257,6 +259,7 @@
 				<file name="Menus.js" />
 				<file name="Pages.js" />
 				<file name="Trees.js" />
+				<file name="Minimal.js" />
 			</sources>
 				
 			<sources dir="${basedir}">
@@ -269,7 +272,7 @@
 			<filelist dir="${war.dir}/js/sanitizer" files="sanitizer.min.js"/>
 			<filelist dir="${war.dir}/js/deflate" files="pako.min.js"/>
 			<filelist dir="${basedir}" files="client.min.js,grapheditor.min.js,sidebar.min.js,.tmp1.js"/>
-    		</concat>
+    	</concat>
 
 		<loadfile property="version" srcFile="../../VERSION"/>
 		<replace file="${basedir}/base.min.js" token="@DRAWIO-VERSION@" value="${version}"/>
@@ -342,6 +345,7 @@
 				<file name="Menus.js" />
 				<file name="Pages.js" />
 				<file name="Trees.js" />
+				<file name="Minimal.js" />
 			</sources>
 		</jscomp>
 

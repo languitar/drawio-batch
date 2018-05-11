@@ -1036,6 +1036,11 @@ Graph.prototype.defaultThemes = {};
 Graph.prototype.baseUrl = ((window != window.top) ? document.referrer : document.location.toString()).split('#')[0];
 
 /**
+ * Specifies if the label should be edited after an insert.
+ */
+Graph.prototype.editAfterInsert = false;
+
+/**
  * Installs child layout styles.
  */
 Graph.prototype.init = function(container)
@@ -1092,6 +1097,14 @@ Graph.prototype.init = function(container)
 	};
 	
 	this.initLayoutManager();
+};
+
+/**
+ * Sets the XML node for the current diagram.
+ */
+Graph.prototype.isLightboxView = function()
+{
+	return this.lightbox;
 };
 
 /**
@@ -1638,54 +1651,58 @@ Graph.prototype.createLayersDialog = function()
 Graph.prototype.replacePlaceholders = function(cell, str)
 {
 	var result = [];
-	var last = 0;
-	var math = [];
 	
-	while (match = this.placeholderPattern.exec(str))
+	if (str != null)
 	{
-		var val = match[0];
+		var last = 0;
+		var math = [];
 		
-		if (val.length > 2 && val != '%label%' && val != '%tooltip%')
+		while (match = this.placeholderPattern.exec(str))
 		{
-			var tmp = null;
-
-			if (match.index > last && str.charAt(match.index - 1) == '%')
+			var val = match[0];
+			
+			if (val.length > 2 && val != '%label%' && val != '%tooltip%')
 			{
-				tmp = val.substring(1);
-			}
-			else
-			{
-				var name = val.substring(1, val.length - 1);
-				
-				// Workaround for invalid char for getting attribute in older versions of IE
-				if (name.indexOf('{') < 0)
+				var tmp = null;
+	
+				if (match.index > last && str.charAt(match.index - 1) == '%')
 				{
-					var current = cell;
+					tmp = val.substring(1);
+				}
+				else
+				{
+					var name = val.substring(1, val.length - 1);
 					
-					while (tmp == null && current != null)
+					// Workaround for invalid char for getting attribute in older versions of IE
+					if (name.indexOf('{') < 0)
 					{
-						if (current.value != null && typeof(current.value) == 'object')
-						{
-							tmp = (current.hasAttribute(name)) ? ((current.getAttribute(name) != null) ?
-									current.getAttribute(name) : '') : null;
-						}
+						var current = cell;
 						
-						current = this.model.getParent(current);
+						while (tmp == null && current != null)
+						{
+							if (current.value != null && typeof(current.value) == 'object')
+							{
+								tmp = (current.hasAttribute(name)) ? ((current.getAttribute(name) != null) ?
+										current.getAttribute(name) : '') : null;
+							}
+							
+							current = this.model.getParent(current);
+						}
+					}
+					
+					if (tmp == null)
+					{
+						tmp = this.getGlobalVariable(name);
 					}
 				}
-				
-				if (tmp == null)
-				{
-					tmp = this.getGlobalVariable(name);
-				}
-			}
-
-			result.push(str.substring(last, match.index) + ((tmp != null) ? tmp : val));
-			last = match.index + val.length;
-		}
-	}
 	
-	result.push(str.substring(last));
+				result.push(str.substring(last, match.index) + ((tmp != null) ? tmp : val));
+				last = match.index + val.length;
+			}
+		}
+		
+		result.push(str.substring(last));
+	}	
 
 	return result.join('');
 };
@@ -1934,6 +1951,7 @@ Graph.prototype.connectVertex = function(source, direction, length, evt, forceCl
 //			var elbowValue = (direction == mxConstants.DIRECTION_NORTH || direction == mxConstants.DIRECTION_SOUTH) ? 'vertical' : 'horizontal';
 //			edge.style = mxUtils.setStyle(edge.style, 'edgeStyle', 'elbowEdgeStyle');
 //			edge.style = mxUtils.setStyle(edge.style, 'elbow', elbowValue);
+//			edge.style = mxUtils.setStyle(edge.style, 'sourcePortConstraint', direction);
 			result.push(edge);
 		}
 		
@@ -3067,6 +3085,9 @@ HoverIcons.prototype.drag = function(evt, x, y)
 		
 		// Uses elbow edges with vertical or horizontal direction
 //		var direction = this.getDirection();
+//		var es = this.graph.connectionHandler.edgeState;
+//		es.cell.style = mxUtils.setStyle(es.cell.style, 'sourcePortConstraint', direction);
+//		es.style['sourcePortConstraint'] = direction;
 //		var elbowValue = (direction == mxConstants.DIRECTION_NORTH || direction == mxConstants.DIRECTION_SOUTH) ? 'vertical' : 'horizontal';
 //		
 //		var es = this.graph.connectionHandler.edgeState;
@@ -5109,9 +5130,9 @@ if (typeof mxVertexHandler != 'undefined')
 			
 			// Places at same x-coord and 2 grid sizes below existing graph
 			var x = this.snap(Math.round(Math.max(pt.x, bds.x / view.scale - view.translate.x +
-				((bds.width == 0) ? this.gridSize : 0))));
+				((bds.width == 0) ? 2 * this.gridSize : 0))));
 			var y = this.snap(Math.round(Math.max(pt.y, (bds.y + bds.height) / view.scale - view.translate.y +
-				((bds.height == 0) ? 1 : 2) * this.gridSize)));
+				2 * this.gridSize)));
 			
 			return new mxPoint(x, y);
 		};
@@ -5229,9 +5250,9 @@ if (typeof mxVertexHandler != 'undefined')
 							links[i].setAttribute('href', href);
 							
 							if (beforeClick != null)
-			    				{
+			    			{
 								mxEvent.addGestureListeners(links[i], null, null, beforeClick);
-			    				}
+			    			}
 						}
 					}
 				}
@@ -5256,157 +5277,178 @@ if (typeof mxVertexHandler != 'undefined')
 			    scrollTop: 0,
 			    updateCurrentState: function(me)
 			    {
-			    		var tmp = me.sourceState;
-					
+			    	var tmp = me.sourceState;
+			    	
+			    	// Gets topmost intersecting cell with link
+			    	if (tmp == null || graph.getLinkForCell(tmp.cell) == null)
+			    	{
+			    		var cell = graph.getCellAt(me.getGraphX(), me.getGraphY(), null, null, null, function(state, x, y)
+	    				{
+			    			return graph.getLinkForCell(state.cell) == null;
+	    				});
+			    		
+			    		tmp = graph.view.getState(cell);
+			    	}
+			    	
 			      	if (tmp != this.currentState)
 			      	{
-				        	if (this.currentState != null)
-				        	{
+			        	if (this.currentState != null)
+			        	{
 				          	this.clear();
-				        	}
+			        	}
 				        
-			        		this.currentState = tmp;
+			        	this.currentState = tmp;
 				        
-				        	if (this.currentState != null)
-				        	{
+			        	if (this.currentState != null)
+			        	{
 				          	this.activate(this.currentState);
-				        	}
+			        	}
 			      	}
 			    },
 			    mouseDown: function(sender, me)
 			    {
-				    	this.startX = me.getGraphX();
-				    	this.startY = me.getGraphY();
-					    this.scrollLeft = graph.container.scrollLeft;
-					    this.scrollTop = graph.container.scrollTop;
-					    
-			    		if (this.currentLink == null && graph.container.style.overflow == 'auto')
-			    		{
-			    			graph.container.style.cursor = 'move';
-			    		}
-			    		
-			    		this.updateCurrentState(me);
+			    	this.startX = me.getGraphX();
+			    	this.startY = me.getGraphY();
+				    this.scrollLeft = graph.container.scrollLeft;
+				    this.scrollTop = graph.container.scrollTop;
+				    
+		    		if (this.currentLink == null && graph.container.style.overflow == 'auto')
+		    		{
+		    			graph.container.style.cursor = 'move';
+		    		}
+		    		
+		    		this.updateCurrentState(me);
 			    },
 			    mouseMove: function(sender, me)
 			    {
-				    	if (graph.isMouseDown)
-				    	{
-				    		if (this.currentLink != null)
-				    		{
-						    	var dx = Math.abs(this.startX - me.getGraphX());
-						    	var dy = Math.abs(this.startY - me.getGraphY());
-						    	
-						    	if (dx > tol || dy > tol)
-						    	{
-						    		this.clear();
-						    	}
-				    		}
-				    	}
-				    	else
-				    	{
-					    	// Checks for parent link
-					    	var linkNode = me.getSource();
+			    	if (graph.isMouseDown)
+			    	{
+			    		if (this.currentLink != null)
+			    		{
+					    	var dx = Math.abs(this.startX - me.getGraphX());
+					    	var dy = Math.abs(this.startY - me.getGraphY());
 					    	
-					    	while (linkNode != null && linkNode.nodeName.toLowerCase() != 'a')
+					    	if (dx > tol || dy > tol)
 					    	{
-					    		linkNode = linkNode.parentNode;
+					    		this.clear();
 					    	}
-					    	
-				    		if (linkNode != null)
-				    		{
-				    			this.clear();
-				    		}
-				    		else
-				    		{
-						    	if (this.currentState != null && (me.getState() == this.currentState || me.sourceState == null) &&
-						    		graph.intersects(this.currentState, me.getGraphX(), me.getGraphY()))
-						    	{
-					    			return;
-						    	}
-						    	
-						    	this.updateCurrentState(me);
-				    		}
-				    	}
-			    },
-			    mouseUp: function(sender, me)
-			    {
-				    	var source = me.getSource();
-				    	var evt = me.getEvent();
-				    	
+			    		}
+			    	}
+			    	else
+			    	{
 				    	// Checks for parent link
-				    	var linkNode = source;
+				    	var linkNode = me.getSource();
 				    	
 				    	while (linkNode != null && linkNode.nodeName.toLowerCase() != 'a')
 				    	{
 				    		linkNode = linkNode.parentNode;
 				    	}
 				    	
-				    	// Ignores clicks on links and collapse/expand icon
-				    	if (linkNode == null &&
-				    		(((Math.abs(this.scrollLeft - graph.container.scrollLeft) < tol &&
-				        	Math.abs(this.scrollTop - graph.container.scrollTop) < tol) &&
-				    		(me.sourceState == null || !me.isSource(me.sourceState.control))) &&
-				    		(((mxEvent.isLeftMouseButton(evt) || mxEvent.isMiddleMouseButton(evt)) &&
-						!mxEvent.isPopupTrigger(evt)) || mxEvent.isTouchEvent(evt))))
-				    	{
-					    	if (this.currentLink != null)
+			    		if (linkNode != null)
+			    		{
+			    			this.clear();
+			    		}
+			    		else
+			    		{
+				    		if (graph.tooltipHandler != null && this.currentLink != null && this.currentState != null)
+				    		{
+				    			graph.tooltipHandler.reset(me, true, this.currentState);
+				    		}
+				    		
+					    	if (this.currentState != null && (me.getState() == this.currentState || me.sourceState == null) &&
+					    		graph.intersects(this.currentState, me.getGraphX(), me.getGraphY()))
 					    	{
-					    		var blank = graph.isBlankLink(this.currentLink);
-					    		
-					    		if ((this.currentLink.substring(0, 5) === 'data:' ||
-					    			!blank) && beforeClick != null)
-					    		{
-				    				beforeClick(evt, this.currentLink);
-					    		}
-					    		
-					    		if (!mxEvent.isConsumed(evt))
-					    		{
-						    		var target = (mxEvent.isMiddleMouseButton(evt)) ? '_blank' :
-						    			((blank) ? graph.linkTarget : '_top');
-						    		graph.openLink(this.currentLink, target);
-						    		me.consume();
-					    		}
+				    			return;
 					    	}
-					    	else if (onClick != null && !me.isConsumed() &&
-				    			(Math.abs(this.scrollLeft - graph.container.scrollLeft) < tol &&
-				        		Math.abs(this.scrollTop - graph.container.scrollTop) < tol) &&
-				        		(Math.abs(this.startX - me.getGraphX()) < tol &&
-				        		Math.abs(this.startY - me.getGraphY()) < tol))
-				        	{
-					    		onClick(me.getEvent());
+					    	
+					    	this.updateCurrentState(me);
+			    		}
+			    	}
+			    },
+			    mouseUp: function(sender, me)
+			    {
+			    	var source = me.getSource();
+			    	var evt = me.getEvent();
+			    	
+			    	// Checks for parent link
+			    	var linkNode = source;
+			    	
+			    	while (linkNode != null && linkNode.nodeName.toLowerCase() != 'a')
+			    	{
+			    		linkNode = linkNode.parentNode;
+			    	}
+			    	
+			    	// Ignores clicks on links and collapse/expand icon
+			    	if (linkNode == null &&
+			    		(((Math.abs(this.scrollLeft - graph.container.scrollLeft) < tol &&
+			        	Math.abs(this.scrollTop - graph.container.scrollTop) < tol) &&
+			    		(me.sourceState == null || !me.isSource(me.sourceState.control))) &&
+			    		(((mxEvent.isLeftMouseButton(evt) || mxEvent.isMiddleMouseButton(evt)) &&
+			    		!mxEvent.isPopupTrigger(evt)) || mxEvent.isTouchEvent(evt))))
+			    	{
+				    	if (this.currentLink != null)
+				    	{
+				    		var blank = graph.isBlankLink(this.currentLink);
+				    		
+				    		if ((this.currentLink.substring(0, 5) === 'data:' ||
+				    			!blank) && beforeClick != null)
+				    		{
+			    				beforeClick(evt, this.currentLink);
+				    		}
+				    		
+				    		if (!mxEvent.isConsumed(evt))
+				    		{
+					    		var target = (mxEvent.isMiddleMouseButton(evt)) ? '_blank' :
+					    			((blank) ? graph.linkTarget : '_top');
+					    		graph.openLink(this.currentLink, target);
+					    		me.consume();
 				    		}
 				    	}
-				    	
-				    	this.clear();
+				    	else if (onClick != null && !me.isConsumed() &&
+			    			(Math.abs(this.scrollLeft - graph.container.scrollLeft) < tol &&
+			        		Math.abs(this.scrollTop - graph.container.scrollTop) < tol) &&
+			        		(Math.abs(this.startX - me.getGraphX()) < tol &&
+			        		Math.abs(this.startY - me.getGraphY()) < tol))
+			        	{
+				    		onClick(me.getEvent());
+			    		}
+			    	}
+			    	
+			    	this.clear();
 			    },
 			    activate: function(state)
 			    {
-				    	this.currentLink = graph.getAbsoluteUrl(graph.getLinkForCell(state.cell));
-	
-				    	if (this.currentLink != null)
-				    	{
-				    		graph.container.style.cursor = 'pointer';
-	
-				    		if (this.highlight != null)
-				    		{
-				    			this.highlight.highlight(state);
-				    		}
+			    	this.currentLink = graph.getAbsoluteUrl(graph.getLinkForCell(state.cell));
+
+			    	if (this.currentLink != null)
+			    	{
+			    		graph.container.style.cursor = 'pointer';
+
+			    		if (this.highlight != null)
+			    		{
+			    			this.highlight.highlight(state);
+			    		}
 				    }
 			    },
 			    clear: function()
 			    {
-				    	if (graph.container != null)
-				    	{
-				    		graph.container.style.cursor = cursor;
-				    	}
-				    	
-				    	this.currentState = null;
-				    	this.currentLink = null;
-				    	
-				    	if (this.highlight != null)
-				    	{
-				    		this.highlight.hide();
-				    	}
+			    	if (graph.container != null)
+			    	{
+			    		graph.container.style.cursor = cursor;
+			    	}
+			    	
+			    	this.currentState = null;
+			    	this.currentLink = null;
+			    	
+			    	if (this.highlight != null)
+			    	{
+			    		this.highlight.hide();
+			    	}
+			    	
+			    	if (graph.tooltipHandler != null)
+		    		{
+		    			graph.tooltipHandler.hide();
+		    		}
 			    }
 			};
 

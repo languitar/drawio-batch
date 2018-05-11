@@ -12,8 +12,8 @@
  */
 App = function(editor, container, lightbox)
 {
-	EditorUi.call(this, editor, container, (lightbox != null) ? lightbox : urlParams['lightbox'] == '1');
-
+	EditorUi.call(this, editor, container, (lightbox != null) ? lightbox : (urlParams['lightbox'] == '1' || uiTheme == 'min'));
+	
 	// Pre-fetches images
 	if (mxClient.IS_SVG)
 	{
@@ -572,7 +572,7 @@ App.main = function(callback, createUi)
 		}
 
 		// Main
-		var ui = (createUi != null) ? createUi() : new App(new Editor(urlParams['chrome'] == '0'));
+		var ui = (createUi != null) ? createUi() : new App(new Editor(urlParams['chrome'] == '0' || uiTheme == 'min', null, null, null, urlParams['chrome'] != '0'));
 		
 		if (window.mxscript != null)
 		{
@@ -1074,7 +1074,7 @@ App.prototype.checkLicense = function()
 		if (at >= 0)
 		{
 			domain = email.substring(at + 1);
-			//email = this.crc32(email.substring(0, at)) + '@' + domain;
+			email = this.crc32(email.substring(0, at)) + '@' + domain;
 		}
 		
 		// Timestamp is workaround for cached response in certain environments
@@ -1177,7 +1177,7 @@ App.prototype.getEditBlankXml = function()
 {
 	var file = this.getCurrentFile();
 	
-	if (file != null && this.editor.chromeless && this.editor.graph.lightbox && file.realtime == null)
+	if (file != null && this.editor.isChromelessView() && this.editor.graph.isLightboxView() && file.realtime == null)
 	{
 		return file.getData();
 	}
@@ -1348,11 +1348,12 @@ App.prototype.onBeforeUnload = function()
 			// KNOWN: Message is ignored by most browsers
 			if (file.constructor == LocalFile && file.getHash() == '' && !file.isModified() &&
 				urlParams['nowarn'] != '1' && !this.isDiagramEmpty() && urlParams['url'] == null &&
-				!this.editor.chromeless)
+				!this.editor.isChromelessView())
 			{
 				return mxResources.get('ensureDataSaved');
 			}
-			else if (file.constructor != DriveFile && file.isModified())
+			else if ((file.constructor != DriveFile || file.realtime == null ||
+					file.realtime.saving) && file.isModified())
 			{
 				return mxResources.get('allChangesLost');
 			}
@@ -1372,7 +1373,7 @@ App.prototype.onBeforeUnload = function()
  */
 App.prototype.updateDocumentTitle = function()
 {
-	if (!this.editor.graph.lightbox)
+	if (!this.editor.graph.isLightboxView())
 	{
 		var title = this.editor.appName;
 		var file = this.getCurrentFile();
@@ -1698,12 +1699,7 @@ App.prototype.appIconClicked = function(evt)
 		
 		if (mode == App.MODE_GOOGLE)
 		{
-			if (file.desc != null && file.desc.mimeType != null)
-			{
-				// Opens search for all draw.io diagrams
-				this.openLink('https://drive.google.com/drive/u/0/search?q=type:' + file.desc.mimeType + '&authuser=0');
-			}
-			else if (file.desc != null && file.desc.parents.length > 0)
+			if (file.desc != null && file.desc.parents.length > 0)
 			{
 				// Opens containing folder
 				this.openLink('https://drive.google.com/drive/folders/' + file.desc.parents[0].id);
@@ -2365,7 +2361,7 @@ App.prototype.showSplash = function(force)
 			}), true);
 	});
 	
-	if (this.editor.chromeless)
+	if (this.editor.isChromelessView())
 	{
 		this.handleError({message: mxResources.get('noFileSelected')},
 			mxResources.get('errorLoadingFile'), mxUtils.bind(this, function()
@@ -3322,7 +3318,7 @@ App.prototype.fileCreated = function(file, libs, replace, done)
  * @param {number} dx X-coordinate of the translation.
  * @param {number} dy Y-coordinate of the translation.
  */
-App.prototype.loadFile = function(id, sameWindow, file)
+App.prototype.loadFile = function(id, sameWindow, file, success)
 {
 	this.hideDialog();
 	
@@ -3358,6 +3354,11 @@ App.prototype.loadFile = function(id, sameWindow, file)
 						if (data != null)
 						{
 							this.fileLoaded(new StorageFile(this, data, id));
+
+							if (success != null)
+							{
+								success();
+							}
 						}
 						else
 						{
@@ -3379,6 +3380,11 @@ App.prototype.loadFile = function(id, sameWindow, file)
 				// File already loaded
 				this.spinner.stop();
 				this.fileLoaded(file);
+
+				if (success != null)
+				{
+					success();
+				}
 			}
 			else if (id.charAt(0) == 'R')
 			{
@@ -3398,6 +3404,11 @@ App.prototype.loadFile = function(id, sameWindow, file)
 					return id;
 				};
 				this.fileLoaded(tempFile);
+
+				if (success != null)
+				{
+					success();
+				}
 			}
 			else if (id.charAt(0) == 'U')
 			{
@@ -3456,7 +3467,7 @@ App.prototype.loadFile = function(id, sameWindow, file)
 									if (this.drive != null)
 									{
 										this.spinner.stop();
-										this.loadFile('G' + url.substring(31, url.lastIndexOf('&')), sameWindow);
+										this.loadFile('G' + url.substring(31, url.lastIndexOf('&')), sameWindow, success);
 										
 										return true;
 									}
@@ -3521,6 +3532,11 @@ App.prototype.loadFile = function(id, sameWindow, file)
 					{
 						this.spinner.stop();
 						this.fileLoaded(file);
+
+						if (success != null)
+						{
+							success();
+						}
 					}), mxUtils.bind(this, function(resp)
 					{
 						// Makes sure the file does not save the invalid UI model and overwrites anything important
@@ -4848,7 +4864,8 @@ App.prototype.updateUserElement = function()
 								'</td><td valign="top" style="white-space:nowrap;' +
 								((driveUser.pictureUrl != null) ? 'padding-top:14px;' : '') +
 								'"><b>' + mxUtils.htmlEntities(driveUser.displayName) + '</b><br>' +
-								'<small>' + mxUtils.htmlEntities(driveUser.email) + '</small></tr></table>';
+								'<small>' + mxUtils.htmlEntities(driveUser.email) + '</small><br><br>' +
+								'<small>' + mxResources.get('googleDrive') + '</small></tr></table>';
 							var div = document.createElement('div');
 							div.style.textAlign = 'center';
 							div.style.padding = '12px';
@@ -4907,7 +4924,7 @@ App.prototype.updateUserElement = function()
 						}
 					}
 					
-					var addUser = mxUtils.bind(this, function(user, logo, logout)
+					var addUser = mxUtils.bind(this, function(user, logo, logout, label)
 					{
 						if (user != null)
 						{
@@ -4920,8 +4937,9 @@ App.prototype.updateUserElement = function()
 							this.userPanel.innerHTML += '<table style="font-size:10pt;padding:20px 20px 10px 10px;"><tr><td valign="top">' +
 								((logo != null) ? '<img style="margin-right:10px;" src="' + logo + '" width="40" height="40"/></td>' : '') +
 								'<td valign="middle" style="white-space:nowrap;"><b>' + mxUtils.htmlEntities(user.displayName) + '</b>' +
-								((user.email != null) ? '<br><font color="gray">' + mxUtils.htmlEntities(user.email) + '</font></td>' : '') +
-								'</tr></table>';
+								((user.email != null) ? '<br><font color="gray">' + mxUtils.htmlEntities(user.email) + '</font>' : '') +
+								((label != null) ? '<br><br><small>' + mxUtils.htmlEntities(label) + '</small>' : '') +
+								'</td></tr></table>';
 							var div = document.createElement('div');
 							div.style.textAlign = 'center';
 							div.style.padding = '12px';
@@ -4966,7 +4984,7 @@ App.prototype.updateUserElement = function()
 							{
 								this.dropbox.logout();
 							}
-						}));
+						}), mxResources.get('dropbox'));
 					}
 
 					if (this.oneDrive != null)
@@ -4997,7 +5015,7 @@ App.prototype.updateUserElement = function()
 							{
 								this.oneDrive.logout();
 							}
-						}));
+						}), mxResources.get('oneDrive'));
 					}
 
 					if (this.gitHub != null)
@@ -5028,7 +5046,7 @@ App.prototype.updateUserElement = function()
 							{
 								this.gitHub.logout();
 							}
-						}));
+						}), mxResources.get('github'));
 					}
 					
 					//TODO We have no user info from Trello, how we can create a user?
@@ -5060,7 +5078,7 @@ App.prototype.updateUserElement = function()
 							{
 								this.trello.logout();
 							}
-						}));
+						}), mxResources.get('trello'));
 					}
 					
 					if (!connected)

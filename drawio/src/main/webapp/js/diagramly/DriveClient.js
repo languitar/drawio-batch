@@ -11,7 +11,7 @@ DriveClient = function(editorUi)
 	 */
 	this.ui = editorUi;
 
-	if (this.ui.editor.chromeless && urlParams['rt'] != '1')
+	if (this.ui.editor.isChromelessView() && urlParams['rt'] != '1')
 	{
 		// Workaround for Google Drive requiring the user to click on the file in the
 		// drive UI when not using this scope (user other scope with rt=1 URL param)
@@ -842,7 +842,7 @@ DriveClient.prototype.saveFile = function(file, revision, success, error, noChec
 				'mimeType': (file.constructor == DriveLibrary) ? this.libraryMimeType : this.mimeType,
 				'title': file.getTitle()
 			};
-
+			
 			// Specifies that no thumbnail should be uploaded in which case the existing thumbnail is used
 			if (!keepExisting)
 			{
@@ -900,7 +900,7 @@ DriveClient.prototype.saveFile = function(file, revision, success, error, noChec
 		{
 			// NOTE: getThumbnail is asynchronous and returns false if no thumbnails can be created
 			if (unloading || file.constructor == DriveLibrary || !this.enableThumbnails || urlParams['thumb'] == '0' ||
-				!this.ui.getThumbnail(this.thumbnailWidth, mxUtils.bind(this, function(canvas)
+				(file.realtime != null && !file.realtime.connected) || !this.ui.getThumbnail(this.thumbnailWidth, mxUtils.bind(this, function(canvas)
 			{
 				// Callback for getThumbnail
 				var thumb = null;
@@ -933,7 +933,7 @@ DriveClient.prototype.saveFile = function(file, revision, success, error, noChec
 			})))
 			{
 				// If-branch
-				doSave(null, null, file.constructor != DriveLibrary);
+				doSave(null, null, file.constructor != DriveLibrary && (file.realtime == null || file.realtime.connected));
 			}
 		});
 		
