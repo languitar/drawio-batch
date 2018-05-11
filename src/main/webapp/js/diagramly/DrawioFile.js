@@ -248,7 +248,7 @@ DrawioFile.prototype.getId = function()
  */
 DrawioFile.prototype.isEditable = function()
 {
-	return !this.ui.editor.chromeless || this.ui.editor.editable;
+	return !this.ui.editor.isChromelessView() || this.ui.editor.editable;
 };
 
 /**
@@ -357,7 +357,7 @@ DrawioFile.prototype.addUnsavedStatus = function(err)
 {
 	if (err instanceof Error && err.message != null)
 	{
-		this.ui.editor.setStatus('<div class="geStatusAlert" style="cursor:pointer;overflow:hidden;">' +
+		this.ui.editor.setStatus('<div class="geStatusAlert" style="overflow:hidden;">' +
 				mxUtils.htmlEntities(mxResources.get('unsavedChanges')) +
 				' (' + mxUtils.htmlEntities(err.message) + ')</div>');
 	}
