@@ -16,7 +16,7 @@
 	
 	Sidebar.prototype.addArchimate3ApplicationPalette = function()
 	{
-		var am2 = 'html=1;whiteSpace=wrap;fillColor=#99ffff;strokeColor=#000000;shape=mxgraph.archimate3.';
+		var am2 = 'html=1;outlineConnect=0;whiteSpace=wrap;fillColor=#99ffff;strokeColor=#000000;shape=mxgraph.archimate3.';
 
 		// Space savers
 		var sb = this;
@@ -76,7 +76,8 @@
 
 	Sidebar.prototype.addArchimate3BusinessPalette = function()
 	{
-		var am2 = 'html=1;whiteSpace=wrap;fillColor=#ffff99;strokeColor=#000000;shape=mxgraph.archimate3.';
+		var am2 = 'html=1;outlineConnect=0;whiteSpace=wrap;fillColor=#ffff99;strokeColor=#000000;shape=mxgraph.archimate3.';
+		var am3 = 'html=1;outlineConnect=0;whiteSpace=wrap;fillColor=#ffff99;strokeColor=#000000;verticalLabelPosition=bottom;verticalAlign=top;align=center;shape=mxgraph.archimate3.';
 
 		// Space savers
 		var sb = this;
@@ -90,7 +91,7 @@
 		[
 			this.createVertexTemplateEntry(am2 + 'application;appType=actor;archiType=square;', 
 					w * 150, h * 75, '', 'Business Actor', null, null, this.getTagsForStencil(gn, '', dt + 'actor').join(' ')),
-			this.createVertexTemplateEntry(am2 + 'actor;', 
+			this.createVertexTemplateEntry(am3 + 'actor;', 
 					w * 50, h * 95, '', 'Actor', null, null, this.getTagsForStencil(gn, '', dt + 'actor').join(' ')),
 			this.createVertexTemplateEntry(am2 + 'application;appType=role;archiType=square;', 
 					w * 150, h * 75, '', 'Business Role', null, null, this.getTagsForStencil(gn, '', dt + 'role').join(' ')),
@@ -146,7 +147,7 @@
 
 	Sidebar.prototype.addArchimate3CompositePalette = function()
 	{
-		var am2 = 'html=1;whiteSpace=wrap;fillColor=#FFB973;strokeColor=#000000;shape=mxgraph.archimate3.';
+		var am2 = 'html=1;outlineConnect=0;whiteSpace=wrap;fillColor=#FFB973;strokeColor=#000000;shape=mxgraph.archimate3.';
 
 		// Space savers
 		var sb = this;
@@ -175,8 +176,8 @@
 	
 	Sidebar.prototype.addArchimate3ImplementationAndMigrationPalette = function()
 	{
-		var am2 = 'html=1;whiteSpace=wrap;fillColor=#FFE0E0;strokeColor=#000000;shape=mxgraph.archimate3.';
-		var am3 = 'html=1;whiteSpace=wrap;fillColor=#E0FFE0;strokeColor=#000000;shape=mxgraph.archimate3.';
+		var am2 = 'html=1;outlineConnect=0;whiteSpace=wrap;fillColor=#FFE0E0;strokeColor=#000000;shape=mxgraph.archimate3.';
+		var am3 = 'html=1;outlineConnect=0;whiteSpace=wrap;fillColor=#E0FFE0;strokeColor=#000000;shape=mxgraph.archimate3.';
 
 		// Space savers
 		var sb = this;
@@ -213,7 +214,7 @@
 	
 	Sidebar.prototype.addArchimate3MotivationPalette = function()
 	{
-		var am2 = 'html=1;whiteSpace=wrap;fillColor=#CCCCFF;strokeColor=#000000;shape=mxgraph.archimate3.';
+		var am2 = 'html=1;outlineConnect=0;whiteSpace=wrap;fillColor=#CCCCFF;strokeColor=#000000;shape=mxgraph.archimate3.';
 
 		// Space savers
 		var sb = this;
@@ -262,7 +263,7 @@
 	
 	Sidebar.prototype.addArchimate3PhysicalPalette = function()
 	{
-		var am2 = 'html=1;whiteSpace=wrap;fillColor=#AFFFAF;strokeColor=#000000;shape=mxgraph.archimate3.';
+		var am2 = 'html=1;outlineConnect=0;whiteSpace=wrap;fillColor=#AFFFAF;strokeColor=#000000;shape=mxgraph.archimate3.';
 
 		// Space savers
 		var sb = this;
@@ -362,7 +363,7 @@
 	
 	Sidebar.prototype.addArchimate3StrategyPalette = function()
 	{
-		var am2 = 'html=1;whiteSpace=wrap;fillColor=#F5DEAA;strokeColor=#000000;shape=mxgraph.archimate3.';
+		var am2 = 'html=1;outlineConnect=0;whiteSpace=wrap;fillColor=#F5DEAA;strokeColor=#000000;shape=mxgraph.archimate3.';
 
 		// Space savers
 		var sb = this;
@@ -393,7 +394,7 @@
 	
 	Sidebar.prototype.addArchimate3TechnologyPalette = function()
 	{
-		var am2 = 'html=1;whiteSpace=wrap;fillColor=#AFFFAF;strokeColor=#000000;shape=mxgraph.archimate3.';
+		var am2 = 'html=1;outlineConnect=0;whiteSpace=wrap;fillColor=#AFFFAF;strokeColor=#000000;shape=mxgraph.archimate3.';
 
 		// Space savers
 		var sb = this;

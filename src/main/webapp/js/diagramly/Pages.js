@@ -328,8 +328,6 @@ EditorUi.prototype.initPages = function()
 		graphViewValidateBackground.apply(graph.view, arguments);
 	});
 
-	// Math workaround is only needed for initial rendering
-	var ignorePendingMath = false;
 	var lastPage = null;
 	
 	var updateTabs = mxUtils.bind(this, function()
@@ -376,28 +374,19 @@ EditorUi.prototype.initPages = function()
 		if (typeof(MathJax) !== 'undefined' && typeof(MathJax.Hub) !== 'undefined')
 		{
 			// Pending math should not be rendered if the graph has no math enabled
-			if (!ignorePendingMath && this.editor != null)
+			if (MathJax.Hub.queue.pending == 1 && this.editor != null && !this.editor.graph.mathEnabled)
 			{
-				if (MathJax.Hub.queue.pending == 1 && !this.editor.graph.mathEnabled)
-				{
-					// Since there is no way to stop/undo mathjax or
-					// clear the queue, we do a refresh after typeset
-					MathJax.Hub.Queue(mxUtils.bind(this, function()
-					{
-						this.editor.graph.refresh();
-					}));
-				}
-				
+				// Since there is no way to stop/undo mathjax or
+				// clear the queue we have to refresh after typeset
 				MathJax.Hub.Queue(mxUtils.bind(this, function()
 				{
-					ignorePendingMath = true;
+					this.editor.graph.refresh();
 				}));
 			}
 		}
 		else if (typeof(Editor.MathJaxClear) !== 'undefined' && (this.editor == null || !this.editor.graph.mathEnabled))
 		{
 			// Clears our own queue for async loading
-			ignorePendingMath = true;
 			Editor.MathJaxClear();
 		}
 	});
@@ -457,7 +446,7 @@ Graph.prototype.createViewState = function(node)
 		tooltips: node.getAttribute('tooltips') != '0',
 		connect: node.getAttribute('connect') != '0',
 		arrows: node.getAttribute('arrows') != '0',
-		mathEnabled: node.getAttribute('math') != '0',
+		mathEnabled: node.getAttribute('math') == '1',
 		selectionCells: null,
 		defaultParent: null,
 		scrollbars: this.defaultScrollbars,
@@ -1038,7 +1027,7 @@ EditorUi.prototype.createTab = function(hoverEnabled)
 	tab.style.border = (uiTheme == 'dark') ? '1px solid #505759' : '1px solid #c0c0c0';
 	tab.style.borderBottomStyle = 'solid';
 	tab.style.backgroundColor = this.tabContainer.style.backgroundColor;
-	tab.style.cursor = 'default';
+	tab.style.cursor = 'move';
 	tab.style.color = 'gray';
 
 	if (hoverEnabled)

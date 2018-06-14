@@ -54,6 +54,66 @@ var com;
                 		return mxVsdxCodec.vsdxPlaceholder;
                 };
                 
+                mxVsdxCodec.parsererrorNS_$LI$ = function ()
+                {
+            		if (mxVsdxCodec.parsererrorNS == null)
+            		{
+            			mxVsdxCodec.parsererrorNS = "";
+            			
+            			if (window.DOMParser) 
+            			{
+	            			var parser = new DOMParser();
+	            			
+	            			try
+	            			{
+	            				mxVsdxCodec.parsererrorNS = parser.parseFromString('<', 'text/xml').getElementsByTagName("parsererror")[0].namespaceURI;
+	            			}
+	            			catch(e)
+	            			{
+	            				//ignore! IE11 throw an exception on XML syntax error
+	            			}
+            			}
+        			}
+
+            		return mxVsdxCodec.parsererrorNS;
+                };
+                
+                mxVsdxCodec.parseXml = function (xml) 
+                {
+                	try
+                	{
+                		var doc = mxUtils.parseXml(xml);
+                		
+                		if (doc.getElementsByTagNameNS(mxVsdxCodec.parsererrorNS, 'parsererror').length > 0)
+                		{
+                			return null;
+                		}
+                		else
+            			{
+                			return doc;
+            			}
+                	}
+                	catch (e) 
+                	{
+                		//IE11 throw an exception on XML syntax error
+                		return null; 
+                	}
+                };
+                
+                //TODO Optimize this function
+                mxVsdxCodec.decodeUTF16LE = function ( binaryStr ) 
+                {
+                    var cp = "";
+                    for( var i = 0; i < binaryStr.length; i+=2) 
+                    {
+                        cp += String.fromCharCode( 
+                             binaryStr.charCodeAt(i) |
+                            ( binaryStr.charCodeAt(i+1) << 8 )
+                        );
+                    }
+
+                    return cp ;
+                }
                 /**
                  * Parses the input VSDX format and uses the information to populate
                  * the specified graph.
@@ -169,142 +229,173 @@ var com;
 	                    	if (processedFiles == filesCount) 
 	                    	{
 	                    		var dateAfter = new Date();
-	                         //console.log(processedFiles + " File extracted in " + (dateAfter - dateBefore) + "ms");
-	                         allDone();
+		                         //console.log(processedFiles + " File extracted in " + (dateAfter - dateBefore) + "ms");
+		                     	try
+		                    	{
+		                     		allDone();
+		                    	}
+		                    	catch(e)
+		                    	{
+		                    		console.log(e);
+		                    		
+		                    		if (onerror != null) 
+		                    		{
+		                    			onerror();
+		                    		}
+		                    		else
+		                    		{
+		                    			callback("");
+		                    		}
+		                    	}
+
 	                    	}
                     };
                     
                     JSZip.loadAsync(file)                                   
                     .then(function(zip) 
                     {
-                        var dateAfter = new Date();
-                       	//console.log(" (loaded in " + (dateAfter - dateBefore) + "ms)");
-                       	
-                        zip.forEach(function (relativePath, zipEntry) 
-                        {  
-        					var filename = zipEntry.name;
-                        	var name = filename.toLowerCase();
-        					var nameLen = name.length;
-                            if (name.indexOf('.xml') == nameLen - 4 || name.indexOf('.xml.rels') == nameLen - 9) //xml files
-                            {
-                            	filesCount++;
-        	                    zipEntry.async("string").then(function (str) 
-        	                  	{
+                    	if (Object.keys(zip.files).length == 0)
+                    	{
+                    		if (onerror != null)
+                    		{
+                    			onerror();
+                    		}
+                    	}
+                    	else
+                    	{
+	                        var dateAfter = new Date();
+	                       	//console.log(" (loaded in " + (dateAfter - dateBefore) + "ms)");
+	                       	
+	                        zip.forEach(function (relativePath, zipEntry) 
+	                        {  
+	        					var filename = zipEntry.name;
+	                        	var name = filename.toLowerCase();
+	        					var nameLen = name.length;
+	                            if (name.indexOf('.xml') == nameLen - 4 || name.indexOf('.xml.rels') == nameLen - 9) //xml files
+	                            {
+	                            	filesCount++;
+	        	                    zipEntry.async("string").then(function (str) 
+	        	                  	{
         	                    		if (!(str.length === 0)) {
-        	    						//UTF-8 BOM causes exception while parsing, so remove it
-        	    						//TODO is the text encoding will be correct or string must be re-read as UTF-8?
-                                        if ((function (str, searchString, position) {
-                                            if (position === void 0) { position = 0; }
-                                            return str.substr(position, searchString.length) === searchString;
-                                        })(str, "\u00ef\u00bb\u00bf"))
-                                            str = str.substring(3);
-                                        var doc = mxUtils.parseXml(str);
-                                        if (doc == null) { //FIXME TODO find a way to change encoding in javascript
-//                                            var outBytes = out.toByteArray();
-//                                            if (outBytes[1] === 0 && outBytes[3] === 0 && outBytes[5] === 0) {
-//                                                str = out.toString("UTF-16LE");
-//                                                doc = mxUtils.parseXml(str);
-//                                            }
-                                        	//TODO add any other non-standard encoding that may be needed 
-                                        }
-                                        doc.vsdxFileName = filename;
-                                        /* put */ (docData[filename] = doc);
-                                    }
-	        	                    	processedFiles++;
-	
-	        	                    	doneCheck();
-        	                   	});
-                            }
-                            else if (name.indexOf(mxVsdxCodec.vsdxPlaceholder + "/media") === 0)//binary files
-                           	{
-                            	filesCount++;
-                            	if ((function (str, searchString) { var pos = str.length - searchString.length; var lastIndex = str.indexOf(searchString, pos); return lastIndex !== -1 && lastIndex === pos; })(name, ".emf")) {
-                            		if (JSZip.support.uint8array) 
-                            		{
-		                            	zipEntry.async("uint8array").then(function (emfData) 
-		           	                  	{
-	                                        var imageFound = false;
-	                                        var base64Str = "";
-	                                        for (var i = 0; i < emfData.length - 8; i++) {
-	                                            if (_this.isPng(emfData, i) || _this.isJpg(emfData, i)) {
-	                                            	base64Str = com.mxgraph.online.mxBase64.encodeToString(emfData, i);
-	                                                imageFound = true;
-	                                                break;
-	                                            }
+	        	    						//UTF-8 BOM causes exception while parsing, so remove it
+	        	    						//TODO is the text encoding will be correct or string must be re-read as UTF-8?
+	                                        if (str.charCodeAt(0) == 65279)
+                                        	{
+	                                            str = str.substring(1);
+                                        	}
+	                                        
+	                                        var doc = mxVsdxCodec.parseXml(str);
+	                                        
+	                                        if (doc == null) 
+	                                        {
+	                                        	if (str.charCodeAt(1) === 0 && str.charCodeAt(3) === 0 && str.charCodeAt(5) === 0)
+                                        		{
+	                                        		doc = mxVsdxCodec.parseXml(mxVsdxCodec.decodeUTF16LE(str));
+                                        		}
+	                                        	//TODO add any other non-standard encoding that may be needed 
 	                                        }
-	                                        ;
-	                                        if (imageFound) {
-	    	                                    /* put */ (mediaData[filename] = base64Str);
-	                                        }
+	                                        
+	                                        if (doc != null)
+                                        	{
+		                                        doc.vsdxFileName = filename;
+		                                        /* put */ (docData[filename] = doc);
+                                        	}
+	                                    }
+		        	                    	processedFiles++;
 		
-		        	                    	processedFiles++;
+		        	                    	doneCheck();
+	        	                   	});
+	                            }
+	                            else if (name.indexOf(mxVsdxCodec.vsdxPlaceholder + "/media") === 0)//binary files
+	                           	{
+	                            	filesCount++;
+	                            	if ((function (str, searchString) { var pos = str.length - searchString.length; var lastIndex = str.indexOf(searchString, pos); return lastIndex !== -1 && lastIndex === pos; })(name, ".emf")) {
+	                            		if (JSZip.support.uint8array) 
+	                            		{
+			                            	zipEntry.async("uint8array").then(function (emfData) 
+			           	                  	{
+		                                        var imageFound = false;
+		                                        var base64Str = "";
+		                                        for (var i = 0; i < emfData.length - 8; i++) {
+		                                            if (_this.isPng(emfData, i) || _this.isJpg(emfData, i)) {
+		                                            	base64Str = com.mxgraph.online.mxBase64.encodeToString(emfData, i);
+		                                                imageFound = true;
+		                                                break;
+		                                            }
+		                                        }
+		                                        ;
+		                                        if (imageFound) {
+		    	                                    /* put */ (mediaData[filename] = base64Str);
+		                                        }
+			
+			        	                    	processedFiles++;
+		
+			        	                    	doneCheck();
+			           	                   	});
+	                            		}
+	                            	}
+	                            	else if ((function (str, searchString) { var pos = str.length - searchString.length; var lastIndex = str.indexOf(searchString, pos); return lastIndex !== -1 && lastIndex === pos; })(name, ".bmp")) {
+	                            		if (JSZip.support.uint8array) 
+	                            		{
+			                            	zipEntry.async("uint8array").then(function (bmpData) 
+			           	                  	{
+			                            		var bitmap = new BmpDecoder(bmpData);
+			                            		
+			                            		var c = document.createElement("canvas");
+			                            		c.width = bitmap.width;
+			                              	  	c.height = bitmap.height;
+			                            		var ctx = c.getContext("2d");
+			                            		ctx.putImageData(bitmap.imageData, 0, 0);
+			                            		var jpgData = c.toDataURL("image/jpeg");
+	                                            /* put */ (mediaData[filename] = jpgData.substr(23)); //23 is the length of "data:image/jpeg;base64,"
 	
-		        	                    	doneCheck();
-		           	                   	});
-                            		}
-                            	}
-                            	else if ((function (str, searchString) { var pos = str.length - searchString.length; var lastIndex = str.indexOf(searchString, pos); return lastIndex !== -1 && lastIndex === pos; })(name, ".bmp")) {
-                            		if (JSZip.support.uint8array) 
-                            		{
-		                            	zipEntry.async("uint8array").then(function (bmpData) 
+			        	                    	processedFiles++;
+			        	                    	doneCheck();
+			           	                   	});
+	                            		}
+	                            	}
+	                            	else
+	                            	{
+		                            	zipEntry.async("base64").then(function (base64Str) 
 		           	                  	{
-		                            		var bitmap = new BmpDecoder(bmpData);
-		                            		
-		                            		var c = document.createElement("canvas");
-		                            		c.width = bitmap.width;
-		                              	  	c.height = bitmap.height;
-		                            		var ctx = c.getContext("2d");
-		                            		ctx.putImageData(bitmap.imageData, 0, 0);
-		                            		var jpgData = c.toDataURL("image/jpeg");
-                                            /* put */ (mediaData[filename] = jpgData.substr(23)); //23 is the length of "data:image/jpeg;base64,"
-
-		        	                    	processedFiles++;
-		        	                    	doneCheck();
+	//	                                    if ((function (str, searchString) { var pos = str.length - searchString.length; var lastIndex = str.indexOf(searchString, pos); return lastIndex !== -1 && lastIndex === pos; })(name, ".bmp")) {
+	//	                                        try 
+	//	                                        {
+	//	    	                            		//convert BMP files to PNG
+	//		                                    	var bmpImg = new Image();
+	//		                                        
+	//		                                        bmpImg.onload = function() {
+	//		                                            var c = document.createElement("canvas");
+	//		                                            c.width = bmpImg.width;
+	//		                                            c.height = bmpImg.height;
+	//		                                            var ctx = c.getContext("2d");
+	//		                                            ctx.drawImage(bmpImg, 0, 0);
+	//		                                            var jpgData = c.toDataURL("image/jpeg");
+	//		                                            
+	//		                                            /* put */ (mediaData[filename] = jpgData.substr(23)); //23 is the length of "data:image/jpeg;base64,"
+	//		                                            
+	//		                                            processedFiles++;
+	//		                                            doneCheck();
+	//		                                        };
+	//	
+	//		                                        bmpImg.src = "data:image/bmp;base64," + base64Str;
+	//	                                        }
+	//	                                        catch (e) {} //conversion failed. Nothing can be done!
+	//	                                    }
+	//	                                    else 
+	//	                                    {
+			                                    /* put */ (mediaData[filename] = base64Str);
+			                                	
+			        	                    	processedFiles++;
+			        	                    	doneCheck();
+	//	                                    }
 		           	                   	});
-                            		}
-                            	}
-                            	else
-                            	{
-	                            	zipEntry.async("base64").then(function (base64Str) 
-	           	                  	{
-//	                                    if ((function (str, searchString) { var pos = str.length - searchString.length; var lastIndex = str.indexOf(searchString, pos); return lastIndex !== -1 && lastIndex === pos; })(name, ".bmp")) {
-//	                                        try 
-//	                                        {
-//	    	                            		//convert BMP files to PNG
-//		                                    	var bmpImg = new Image();
-//		                                        
-//		                                        bmpImg.onload = function() {
-//		                                            var c = document.createElement("canvas");
-//		                                            c.width = bmpImg.width;
-//		                                            c.height = bmpImg.height;
-//		                                            var ctx = c.getContext("2d");
-//		                                            ctx.drawImage(bmpImg, 0, 0);
-//		                                            var jpgData = c.toDataURL("image/jpeg");
-//		                                            
-//		                                            /* put */ (mediaData[filename] = jpgData.substr(23)); //23 is the length of "data:image/jpeg;base64,"
-//		                                            
-//		                                            processedFiles++;
-//		                                            doneCheck();
-//		                                        };
-//	
-//		                                        bmpImg.src = "data:image/bmp;base64," + base64Str;
-//	                                        }
-//	                                        catch (e) {} //conversion failed. Nothing can be done!
-//	                                    }
-//	                                    else 
-//	                                    {
-		                                    /* put */ (mediaData[filename] = base64Str);
-		                                	
-		        	                    	processedFiles++;
-		        	                    	doneCheck();
-//	                                    }
-	           	                   	});
-                            	}
-                           	}
-                        });
+	                            	}
+	                           	}
+	                        });
+                    	}
                     }, function (e) {
                     		//console.log("Error!" + e.message);
-                    		
                     		if (onerror != null)
                     		{
                     			onerror(e);
@@ -738,6 +829,27 @@ var com;
                     }
                     return null;
                 };
+                
+                
+                mxVsdxCodec.calculateAbsolutePoint = function (cell) 
+                {
+                    var x = 0, y = 0;
+                    while (cell != null)
+                    {
+                        var geo = cell.geometry;
+
+                        if (geo != null) 
+                        {
+                            x += geo.x;
+                            y += geo.y;                
+                        }
+                        cell = cell.parent;
+                    }
+
+                    return new mxPoint(x, y);
+                }
+                
+
                 /**
                  * Adds a connected edge to the graph.
                  * These edged are the referenced in one Connect element at least.
@@ -774,24 +886,66 @@ var com;
                     var endXY = edgeShape.getEndXY(parentHeight);
                     var points = edgeShape.getRoutingPoints(parentHeight, beginXY, edgeShape.getRotation());
                     this.rotateChildEdge(graph.getModel(), parent, beginXY, endXY, points);
+                    var fromConstraint = null;
                     var sourceSheet = connect.getSourceToSheet();
                     var source = sourceSheet != null ? (function (m, k) { if (m.entries == null)
                         m.entries = []; for (var i = 0; i < m.entries.length; i++)
                         if (m.entries[i].key.equals != null && m.entries[i].key.equals(k) || m.entries[i].key === k) {
                             return m.entries[i].value;
                         } return null; })(this.vertexMap, new com.mxgraph.io.vsdx.ShapePageId(pageId, sourceSheet)) : null;
-                    if (source == null) {
+                    
+                    var removeFirstPt = true;
+                    if (source == null) 
+                    {
                         source = graph.insertVertex(parent, null, null, Math.floor(Math.round(beginXY.x * 100) / 100), Math.floor(Math.round(beginXY.y * 100) / 100), 0, 0);
                     }
+                    else if (source.style && source.style.indexOf(';rotation=') == -1)
+            		{
+                        var absOriginFrom = mxVsdxCodec.calculateAbsolutePoint(source);
+                        var absBeginXY = mxVsdxCodec.calculateAbsolutePoint(parent);
+                        var srcGeo = source.geometry;
+                        fromConstraint = new mxPoint(
+                                (absBeginXY.x + beginXY.x - absOriginFrom.x)
+                                        / srcGeo.width,
+                                (absBeginXY.y + beginXY.y - absOriginFrom.y)
+                                        / srcGeo.height);
+                        //TODO fromConstraint rotation support
+            		}
+                    else
+                	{
+                    	removeFirstPt = false;
+                	}
+                    
+                    var toConstraint = null;
                     var toSheet = connect.getTargetToSheet();
                     var target = toSheet != null ? (function (m, k) { if (m.entries == null)
                         m.entries = []; for (var i = 0; i < m.entries.length; i++)
                         if (m.entries[i].key.equals != null && m.entries[i].key.equals(k) || m.entries[i].key === k) {
                             return m.entries[i].value;
                         } return null; })(this.vertexMap, new com.mxgraph.io.vsdx.ShapePageId(pageId, toSheet)) : null;
-                    if (target == null) {
+                    
+                    var removeLastPt = true;
+                    if (target == null) 
+                    {
                         target = graph.insertVertex(parent, null, null, Math.floor(Math.round(endXY.x * 100) / 100), Math.floor(Math.round(endXY.y * 100) / 100), 0, 0);
                     }
+                    else if (target.style && target.style.indexOf(';rotation=') == -1)
+            		{
+                        var absOriginTo = mxVsdxCodec.calculateAbsolutePoint(target);
+                        var absEndXY = mxVsdxCodec.calculateAbsolutePoint(parent);
+                        var trgGeo = target.geometry;
+                        toConstraint = new mxPoint(
+                                (absEndXY.x + endXY.x - absOriginTo.x)
+                                        / trgGeo.width,
+                                (absEndXY.y + endXY.y - absOriginTo.y)
+                                        / trgGeo.height);
+                        //TODO toConstraint rotation support
+            		}
+                    else 
+                    {
+                    	removeLastPt = false;
+                    }
+                    
                     var styleMap = edgeShape.getStyleFromEdgeShape(parentHeight);
                     var edge;
                     var rotation = edgeShape.getRotation();
@@ -811,8 +965,62 @@ var com;
                         edge = graph.insertEdge(parent, null, edgeShape.getTextLabel(), source, target, com.mxgraph.io.vsdx.mxVsdxUtils.getStyleString(styleMap, "="));
                         var lblOffset = edgeShape.getLblEdgeOffset(graph.getView(), points);
                         edge.getGeometry().offset = (lblOffset);
+                        
+                        //add entry/exit points when edge, src, and trg are not rotated
+                        if (fromConstraint != null)
+            			{
+            				graph.setConnectionConstraint(edge, source, true,
+            						new mxConnectionConstraint(fromConstraint, false));
+            			}
+                        
+                        if (removeFirstPt)
+                    	{
+	                        points.shift();
+                    	}
+                        
+            			if (toConstraint != null)
+            			{
+            				graph.setConnectionConstraint(edge, target, false,
+            						new mxConnectionConstraint(toConstraint, false));
+            			}
+            			
+            			if (removeLastPt)
+        				{
+	        				points.pop();
+                        }
                     }
                     var edgeGeometry = graph.getModel().getGeometry(edge);
+                    
+                    //when source.parent != target.parent the front end will change the edge parent to parent 1 but waypoints are not corrected
+                    if (source.parent != target.parent && parent != null && parent.id != 1 && source.parent.id == 1)
+                	{
+                    	var accX = 0;
+                    	var accY = 0;
+                    	
+                    	var prnt = parent;
+                    	
+                    	do 
+                    	{
+                        	var prntGeo = prnt.geometry;
+                        	
+                            if (prntGeo != null) 
+                            {
+                            	accX += prntGeo.x;
+                            	accY += prntGeo.y;
+                            }
+                            prnt = prnt.parent;
+                    	}
+                    	while(prnt != null);
+                    	
+                    	edge.parent = source.parent;
+                    	
+                    	for (var i = 0; i < points.length; i++)
+                		{
+                    		points[i].x += accX;
+                    		points[i].y += accY;
+                		}
+                	}
+                    
                     edgeGeometry.points = (points);
                     if (styleMap.hasOwnProperty("curved") && (function (o1, o2) { if (o1 && o1.equals) {
                         return o1.equals(o2);
@@ -879,6 +1087,9 @@ var com;
                     }
                     this.rotateChildEdge(graph.getModel(), parent, beginXY, endXY, points);
                     var edgeGeometry = graph.getModel().getGeometry(edge);
+                    //remove begin/end points from points array
+                    points.pop();
+                    points.shift();
                     edgeGeometry.points = (points);
                     edgeGeometry.setTerminalPoint(beginXY, true);
                     edgeGeometry.setTerminalPoint(endXY, false);
@@ -1240,7 +1451,10 @@ var com;
                         /*private*/ RowFactory.getDoubleVal = function (val) {
                             try {
                                 if (val != null && !(val.length === 0)) {
-                                    return parseFloat(val);
+                                    var fVal = parseFloat(val);
+                                    
+                                    if (isFinite(fVal))
+                                    	return fVal;
                                 }
                             }
                             catch (e) {
@@ -11555,6 +11769,7 @@ com.mxgraph.io.vsdx.mxVsdxConstants.SET_VALUES_$LI$();
 com.mxgraph.io.vsdx.mxPropertiesManager.defaultColors_$LI$();
 com.mxgraph.io.vsdx.mxPropertiesManager.__static_initialize();
 com.mxgraph.io.mxVsdxCodec.vsdxPlaceholder_$LI$();
+com.mxgraph.io.mxVsdxCodec.parsererrorNS_$LI$();
 
 EditorUi.prototype.doImportVisio = function(file, done, onerror)
 {

@@ -58,6 +58,11 @@
 	 * Default value for custom libraries in mxSettings.
 	 */
 	Editor.defaultCustomLibraries = [];
+	
+	/**
+	 * Default value for custom libraries in mxSettings.
+	 */
+	Editor.enableCustomLibraries = true;
 
 	/**
 	 * Default value for the CSV import dialog.
@@ -198,6 +203,12 @@
 			if (config.defaultCustomLibraries != null)
 			{
 				Editor.defaultCustomLibraries = config.defaultCustomLibraries;
+			}
+			
+			// Disables custom libraries
+			if (config.enableCustomLibraries != null)
+			{
+				Editor.enableCustomLibraries = config.enableCustomLibraries;
 			}
 			
 			// Overrides default vertex style
@@ -565,12 +576,18 @@
 	 */
 	Editor.initMath = function(src, config)
 	{
-		src = (src != null) ? src : 'https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.0/MathJax.js?config=TeX-MML-AM_HTMLorMML';
+		src = (src != null) ? src : 'https://math.draw.io/current/MathJax.js?config=TeX-MML-AM_HTMLorMML';
 		Editor.mathJaxQueue = [];
 		
 		Editor.doMathJaxRender = function(container)
 		{
-			MathJax.Hub.Queue(['Typeset', MathJax.Hub, container]);
+			window.setTimeout(function()
+			{
+				if (container.style.visibility != 'hidden')
+				{
+					MathJax.Hub.Queue(['Typeset', MathJax.Hub, container]);
+				}
+			}, 0);
 		};
 
 		// Disables global typesetting and messages on startup, adds queue for
@@ -587,6 +604,9 @@
 				MathJax.Hub.Config(config || {
 					jax: ['input/TeX', 'input/MathML', 'input/AsciiMath', 'output/HTML-CSS'],
 					extensions: ['tex2jax.js', 'mml2jax.js', 'asciimath2jax.js'],
+					'HTML-CSS': {
+						imageFont: null
+					},
 					TeX: {
 					  extensions: ['AMSmath.js', 'AMSsymbols.js', 'noErrors.js', 'noUndefined.js']
 					},
@@ -637,7 +657,7 @@
 			
 			this.graph.addListener(mxEvent.SIZE, mxUtils.bind(this, function(sender, evt)
 			{
-				if (this.graph.mathEnabled && this.graph.container.style.visibility != 'hidden')
+				if (this.graph.container != null && this.graph.mathEnabled)
 				{
 					Editor.MathJaxRender(this.graph.container);
 				}
@@ -731,18 +751,36 @@
 				this.clear();
 			}
 		};
-		
+
+		/**
+		 * Hook for subclassers.
+		 */
+		DiagramFormatPanel.prototype.isShadowOptionVisible = function()
+		{
+			var file = this.editorUi.getCurrentFile();
+			
+			return urlParams['embed'] == '1' || (file != null && file.isEditable());
+		};
+
+		/**
+		 * Option is not visible in default theme.
+		 */
+	    DiagramFormatPanel.prototype.isMathOptionVisible = function(div)
+	    {
+	        return false;
+	    };
+	    
 		/**
 		 * Add global shadow option.
 		 */
 		var diagramFormatPanelAddView = DiagramFormatPanel.prototype.addView;
-		
+
 		DiagramFormatPanel.prototype.addView = function(div)
 		{
 			var div = diagramFormatPanelAddView.apply(this, arguments);
 			var file = this.editorUi.getCurrentFile();
 			
-			if (mxClient.IS_SVG && (urlParams['embed'] == '1' || (file != null && file.isEditable())))
+			if (mxClient.IS_SVG && this.isShadowOptionVisible())
 			{
 				var ui = this.editorUi;
 				var editor = ui.editor;
@@ -787,7 +825,7 @@
 			
 			return div;
 		};
-		
+
 		/**
 		 * Adds autosave and math typesetting options.
 		 */
@@ -832,7 +870,42 @@
 					div.appendChild(opt);
 				}
 			}
-
+			
+	        if (this.isMathOptionVisible() && graph.isEnabled() && typeof(MathJax) !== 'undefined')
+	        {
+	            // Math
+	            var option = this.createOption(mxResources.get('mathematicalTypesetting'), function()
+	            {
+	                return graph.mathEnabled;
+	            }, function(checked)
+	            {
+	                ui.actions.get('mathematicalTypesetting').funct();
+	            },
+	            {
+	                install: function(apply)
+	                {
+	                    this.listener = function()
+	                    {
+	                        apply(graph.mathEnabled);
+	                    };
+	                    
+	                    ui.addListener('mathEnabledChanged', this.listener);
+	                },
+	                destroy: function()
+	                {
+	                    ui.removeListener(this.listener);
+	                }
+	            });
+	            
+	            option.style.paddingTop = '0px';
+	            div.appendChild(option);
+	            
+	            var help = ui.menus.createHelpLink('https://desk.draw.io/support/solutions/articles/16000032875');
+	            help.style.position = 'relative';
+	            help.style.top = '4px';
+	            option.appendChild(help);
+	        }
+	        
 			return div;
 		};
 		
@@ -1300,11 +1373,61 @@
 	};
 
 	/**
-	 * Adds support for page links.
+	 * Adds support for data:action/json,array of actions where array of actions
+	 * is a JSON array with each action handled in handleCustomLinkAction below.
+	 * An example action is:
+	 * 
+	 * data:action/json,{"actions":[{"toggle": {"cells": ["3", "4"]}}]}
 	 */
-	Graph.prototype.isPageLink = function(href)
+	Graph.prototype.handleCustomLink = function(href)
 	{
-		return href != null && href.substring(0, 10) == 'data:page/';
+		if (href.substring(0, 17) == 'data:action/json,')
+		{
+    		this.model.beginUpdate();
+    		try
+    		{
+				var action = JSON.parse(href.substring(17));
+
+				if (action.actions != null)
+				{
+					for (var i = 0; i < action.actions.length; i++)
+					{
+						this.handleCustomLinkAction(action.actions[i]);
+					}
+				}
+			}
+			catch (e)
+			{
+				if (window.console != null)
+				{
+					console.log('Error in ' + href + ': ' + e);
+				}
+    		}
+    		finally
+    		{
+    			this.model.endUpdate();
+    		}
+		}
+	};
+
+	/**
+	 * Handles each action in the action array of a custom link. This code
+	 * handles toggle actions for cell IDs.
+	 */
+	Graph.prototype.handleCustomLinkAction = function(action)
+	{
+		if (action.toggle != null && action.toggle.cells != null)
+		{
+			for (var i = 0; i < action.toggle.cells.length; i++)
+			{
+				var cell = this.model.getCell(action.toggle.cells[i]);
+				
+				if (cell != null)
+				{
+					this.model.setVisible(cell, !this.model.isVisible(cell))
+				}
+			}
+		}
 	};
 	
 	/**
@@ -1491,7 +1614,7 @@
 	mxStencilRegistry.libraries['mockup'] = [SHAPES_PATH + '/mockup/mxMockupButtons.js'];
 	
 	mxStencilRegistry.libraries['arrows2'] = [SHAPES_PATH + '/mxArrows.js'];
-	mxStencilRegistry.libraries['atlassian'] = [STENCIL_PATH + '/atlassian.xml'];
+	mxStencilRegistry.libraries['atlassian'] = [STENCIL_PATH + '/atlassian.xml', SHAPES_PATH + '/mxAtlassian.js'];
 	mxStencilRegistry.libraries['bpmn'] = [SHAPES_PATH + '/bpmn/mxBpmnShape2.js', STENCIL_PATH + '/bpmn.xml'];
 	mxStencilRegistry.libraries['er'] = [SHAPES_PATH + '/er/mxER.js'];
 	mxStencilRegistry.libraries['flowchart'] = [SHAPES_PATH + '/mxFlowchart.js', STENCIL_PATH + '/flowchart.xml'];
@@ -2061,10 +2184,12 @@
 				doc.writeln('messageStyle: "none",');
 				doc.writeln('jax: ["input/TeX", "input/MathML", "input/AsciiMath", "output/HTML-CSS"],');
 				doc.writeln('extensions: ["tex2jax.js", "mml2jax.js", "asciimath2jax.js"],');
+				doc.writeln('"HTML-CSS": {');
+				doc.writeln('imageFont: null');
+				doc.writeln('},');
 				doc.writeln('TeX: {');
 				doc.writeln('extensions: ["AMSmath.js", "AMSsymbols.js", "noErrors.js", "noUndefined.js"]');
 				doc.writeln('},');
-							// Ignores math in in-place editor
 				doc.writeln('tex2jax: {');
 				doc.writeln('	ignoreClass: "geDisableMathJax"');
 			  	doc.writeln('},');
@@ -2082,7 +2207,7 @@
 				}
 				
 				doc.writeln('</script>');
-				doc.writeln('<script type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.0/MathJax.js"></script>');
+				doc.writeln('<script type="text/javascript" src="https://math.draw.io/current/MathJax.js"></script>');
 			}
 			
 			pv.closeDocument();

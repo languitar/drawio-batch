@@ -1323,6 +1323,11 @@ EditorUi.prototype.initClipboard = function()
 /**
  * Initializes the infinite canvas.
  */
+EditorUi.prototype.lazyZoomDelay = 20;
+
+/**
+ * Initializes the infinite canvas.
+ */
 EditorUi.prototype.initCanvas = function()
 {
 	// Initial page layout view, scrollBuffer and timer-based scrolling
@@ -2003,7 +2008,7 @@ EditorUi.prototype.initCanvas = function()
             
             this.cumulativeZoomFactor = 1;
             this.updateZoomTimeout = null;
-        }), 20);
+        }), this.lazyZoomDelay);
 	};
 	
 	mxEvent.addMouseWheelListener(mxUtils.bind(this, function(evt, up)
@@ -2449,8 +2454,9 @@ EditorUi.prototype.resetScrollbars = function()
 			if (graph.pageVisible)
 			{
 				var pad = graph.getPagePadding();
-				graph.container.scrollTop = Math.floor(pad.y - this.editor.initialTopSpacing);
-				graph.container.scrollLeft = Math.floor(Math.min(pad.x, (graph.container.scrollWidth - graph.container.clientWidth) / 2));
+				graph.container.scrollTop = Math.floor(pad.y - this.editor.initialTopSpacing) - 1;
+				graph.container.scrollLeft = Math.floor(Math.min(pad.x,
+					(graph.container.scrollWidth - graph.container.clientWidth) / 2)) - 1;
 
 				// Scrolls graph to visible area
 				var bounds = graph.getGraphBounds();
@@ -2748,25 +2754,25 @@ EditorUi.prototype.updateActionStates = function()
 	
 	if (cells != null)
 	{
-	    	for (var i = 0; i < cells.length; i++)
-	    	{
-	    		var cell = cells[i];
-	    		
-	    		if (graph.getModel().isEdge(cell))
-	    		{
-	    			edgeSelected = true;
-	    		}
-	    		
-	    		if (graph.getModel().isVertex(cell))
-	    		{
-	    			vertexSelected = true;
-	    		}
-	    		
-	    		if (edgeSelected && vertexSelected)
+    	for (var i = 0; i < cells.length; i++)
+    	{
+    		var cell = cells[i];
+    		
+    		if (graph.getModel().isEdge(cell))
+    		{
+    			edgeSelected = true;
+    		}
+    		
+    		if (graph.getModel().isVertex(cell))
+    		{
+    			vertexSelected = true;
+    		}
+    		
+    		if (edgeSelected && vertexSelected)
 			{
 				break;
 			}
-    		}
+		}
 	}
 	
 	// Updates action states
@@ -3292,6 +3298,7 @@ EditorUi.prototype.hideDialog = function(cancel)
 			this.editor.graph.container.focus();
 		}
 		
+		mxUtils.clearSelection();
 		this.editor.fireEvent(new mxEventObject('hideDialog'));
 	}
 };
@@ -3711,7 +3718,8 @@ EditorUi.prototype.createKeyHandler = function(editor)
 	// Ignores graph enabled state but not chromeless state
 	keyHandler.isEnabledForEvent = function(evt)
 	{
-		return (!mxEvent.isConsumed(evt) && this.isGraphEvent(evt) && this.isEnabled());
+		return (!mxEvent.isConsumed(evt) && this.isGraphEvent(evt) && this.isEnabled() &&
+			(editorUi.dialogs == null || editorUi.dialogs.length == 0));
 	};
 	
 	// Routes command-key to control-key on Mac

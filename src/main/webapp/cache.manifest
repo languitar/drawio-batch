@@ -1,7 +1,7 @@
 CACHE MANIFEST
 
 # THIS FILE WAS GENERATED. DO NOT MODIFY!
-# 05/09/2018 04:27 PM
+# 06/14/2018 12:58 PM
 
 app.html
 index.html?offline=1
@@ -12,6 +12,7 @@ js/app.min.js
 js/shapes.min.js
 js/stencils.min.js
 js/extensions.min.js
+js/diagramly/ElectronApp.js
 styles/grapheditor.css
 styles/atlas.css
 styles/dark.css
@@ -26,11 +27,9 @@ mxgraph/images/window.gif
 mxgraph/images/window-title.gif
 mxgraph/images/button.gif
 mxgraph/images/point.gif
-mxgraph/images/transparent.gif
 resources/dia.txt
 images/delete.png
 images/droptarget.png
-images/edit.gif
 images/help.png
 images/download.png
 images/drawlogo-text-bottom.svg

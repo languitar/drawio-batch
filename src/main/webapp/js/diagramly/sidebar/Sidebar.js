@@ -437,18 +437,28 @@
 					clone.style.borderColor = 'transparent';
 					clone.style.width = '456px';
 	
-					var html = '<!DOCTYPE html><html><head><link rel="stylesheet" type="text/css" href="https://www.draw.io/styles/grapheditor.css">' +
-						'</head><body style="background:#ffffff;font-family:Helvetica,Arial;">' +
-						title2.outerHTML + clone.outerHTML + '</body></html>';
-	
-					clone.style.position = 'absolute';
-					window.document.body.appendChild(clone);
-					var h = clone.clientHeight + 18;
-					clone.parentNode.removeChild(clone);
+					var parser = new DOMParser();
+					var doc = parser.parseFromString('<body style="background:#ffffff;font-family:Helvetica,Arial;">' +
+							title2.outerHTML + clone.outerHTML + '</body>', 'text/html');
 					
-		    		new mxXmlRequest(EXPORT_URL, 'w=456&h=' + h + '&html=' + encodeURIComponent(
-		    			this.editorUi.editor.graph.compress(html))).simulate(document, '_blank');
-	
+					this.editorUi.convertImages(doc.documentElement, mxUtils.bind(this, function(body)
+					{
+						var html = '<!DOCTYPE html><html><head><link rel="stylesheet" type="text/css" ' +
+							'href="https://www.draw.io/styles/grapheditor.css"></head>' +
+							mxUtils.getXml(body) + '</html>';
+		
+						clone.style.position = 'absolute';
+						window.document.body.appendChild(clone);
+						var h = clone.clientHeight + 18;
+						clone.parentNode.removeChild(clone);
+						
+						this.editorUi.confirm('Image data created', mxUtils.bind(this, function()
+						{
+				    		new mxXmlRequest(EXPORT_URL, 'w=456&h=' + h + '&html=' + encodeURIComponent(
+					    			this.editorUi.editor.graph.compress(html))).simulate(document, '_blank');
+						}), null, mxResources.get('save'), mxResources.get('cancel'));
+					}));
+					
 					return;
 				}
 				
@@ -792,7 +802,7 @@
 			{
 				this.addStencilPalette('gcp' + gcp[i], 'GCP / ' + gcp[i],
 						dir + '/gcp/' + gcp[i].toLowerCase().replace(/ /g, '_') + '.xml',
-						';html=1;fillColor=#4387FD;gradientColor=#4683EA;strokeColor=none;verticalLabelPosition=bottom;verticalAlign=top;align=center;');
+						';html=1;outlineConnect=0;fillColor=#4387FD;gradientColor=#4683EA;strokeColor=none;verticalLabelPosition=bottom;verticalAlign=top;align=center;');
 			}
 		}
 
@@ -944,7 +954,7 @@
 		{
 			this.addStencilPalette('cisco' + cisco[i], 'Cisco / ' + cisco[i],
 				dir + '/cisco/' + cisco[i].toLowerCase().replace(/ /g, '_') + '.xml',
-				';html=1;dashed=0;fillColor=#036897;strokeColor=#ffffff;strokeWidth=2;verticalLabelPosition=bottom;verticalAlign=top;outlineConnect=0;', null, null, 1.6);
+				';html=1;dashed=0;fillColor=#036897;strokeColor=#ffffff;strokeWidth=2;verticalLabelPosition=bottom;verticalAlign=top;align=center;outlineConnect=0;', null, null, 1.6);
 		}
 
 		this.addCiscoSafePalette();
@@ -1105,58 +1115,66 @@
 				{
 					var pg = page - Math.ceil((len - count / 4) / count);
 	
-					mxUtils.get(ICONSEARCH_PATH + '?v=2&q=' + encodeURIComponent(searchTerms) +
+					mxUtils.get(ICONSEARCH_PATH + '?q=' + encodeURIComponent(searchTerms) +
 						'&p=' + pg + '&c=' + count, mxUtils.bind(this, function(req)
 					{
 						try
 						{
 							if (req.getStatus() >= 200 && req.getStatus() <= 299)
 							{
-								try
+								// Ignore without error if no response
+								if (req.getText() != null && req.getText().length > 0)
 								{
-									var res = JSON.parse(req.getText());
-									
-									if (res == null || res.icons == null)
+									try
+									{
+										var res = JSON.parse(req.getText());
+										
+										if (res == null || res.icons == null)
+										{
+											succ(results, len, false, terms);
+											this.editorUi.handleError(res);
+										}
+										else
+										{
+											for (var i = 0; i < res.icons.length; i++)
+											{
+												var sizes = res.icons[i].raster_sizes;
+												var index = sizes.length - 1;
+												
+												while (index > 0 && sizes[index].size > 128)
+												{
+													index--;
+												}
+						
+												var size = sizes[index].size;
+												var url = sizes[index].formats[0].preview_url;
+						
+												if (size != null && url != null)
+												{
+													(mxUtils.bind(this, function(s, u)
+													{
+														results.push(mxUtils.bind(this, function()
+														{
+															return this.createVertexTemplate('shape=image;html=1;verticalAlign=top;' +
+																'verticalLabelPosition=bottom;labelBackgroundColor=#ffffff;imageAspect=0;' +
+																'aspect=fixed;image=' + u, s, s, '');
+														}));
+													}))(size, url);
+												}
+											}
+						
+											succ(results, (page - 1) * count + results.length, res.icons.length == count, terms);
+										}
+									}
+									catch (e)
 									{
 										succ(results, len, false, terms);
-										this.editorUi.handleError(res);
-									}
-									else
-									{
-										for (var i = 0; i < res.icons.length; i++)
-										{
-											var sizes = res.icons[i].raster_sizes;
-											var index = sizes.length - 1;
-											
-											while (index > 0 && sizes[index].size > 128)
-											{
-												index--;
-											}
-					
-											var size = sizes[index].size;
-											var url = sizes[index].formats[0].preview_url;
-					
-											if (size != null && url != null)
-											{
-												(mxUtils.bind(this, function(s, u)
-												{
-													results.push(mxUtils.bind(this, function()
-													{
-														return this.createVertexTemplate('shape=image;html=1;verticalAlign=top;' +
-															'verticalLabelPosition=bottom;labelBackgroundColor=#ffffff;imageAspect=0;' +
-															'aspect=fixed;image=' + u, s, s, '');
-													}));
-												}))(size, url);
-											}
-										}
-					
-										succ(results, (page - 1) * count + results.length, res.icons.length == count, terms);
+										this.editorUi.handleError(e);
 									}
 								}
-								catch (e)
+								else
 								{
 									succ(results, len, false, terms);
-									this.editorUi.handleError(e);
 								}
 							}
 							else
