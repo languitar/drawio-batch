@@ -118,7 +118,7 @@ FeedbackDialog.feedbackUrl = 'https://log.draw.io/email';
 	{
 		var a = graphCreateLinkForHint.call(this, href, label);
 		
-		if (!this.isPageLink(href))
+		if (href != null && !this.isCustomLink(href))
 		{
 			// KNOWN: Event with gesture handler mouseUp the middle click opens a framed window
 			mxEvent.addListener(a, 'click', mxUtils.bind(this, function(evt)
@@ -145,11 +145,16 @@ FeedbackDialog.feedbackUrl = 'https://log.draw.io/email';
 		var editorUi = this;
 		var graph = this.editor.graph;
 		
-		global.__emt_isModified = e => {
+		global.__emt_isModified =
+		e => {
 			if (this.getCurrentFile())
+			{
 				return this.getCurrentFile().isModified()
+			}
+
 			return false
 		}
+		
 		// global.__emt_getCurrentFile = e => {
 		// 	return this.getCurrentFile()
 		// }
@@ -350,26 +355,6 @@ FeedbackDialog.feedbackUrl = 'https://log.draw.io/email';
 		// Adds shortcut keys for file operations
 		editorUi.keyHandler.bindAction(78, true, 'new'); // Ctrl+N
 		editorUi.keyHandler.bindAction(79, true, 'open'); // Ctrl+O
-		
-		editorUi.actions.addAction('keyboardShortcuts...', function()
-		{
-			const electron = require('electron');
-			const remote = electron.remote;
-			const BrowserWindow = remote.BrowserWindow;
-			keyboardWindow = new BrowserWindow({width: 1200, height: 1000});
-
-			// and load the index.html of the app.
-			keyboardWindow.loadURL(`file://${__dirname}/shortcuts.svg`);
-
-			// Emitted when the window is closed.
-			keyboardWindow.on('closed', function()
-			{
-			    // Dereference the window object, usually you would store windows
-			    // in an array if your app supports multi windows, this is the time
-			    // when you should delete the corresponding element.
-				keyboardWindow = null;
-			});
-		});
 	}
 	
 	var appLoad = App.prototype.load;

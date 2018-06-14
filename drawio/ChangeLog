@@ -1,3 +1,101 @@
+14-JUN-2018: 8.8.0
+
+- Fixes label link detection cases in Firefox
+
+13-JUN-2018: 8.7.10
+
+- Fixes possible NPE in Electron
+
+13-JUN-2018: 8.7.9
+
+- Fixes possible NPE
+
+13-JUN-2018: 8.7.8
+
+- Fixes scroll wheel zoom while panning
+- Fixes print of white text in Chrome
+- Adds cell ID in metadata dialog
+- Adds support for custom links
+- Uses mxGraph 3.9.7 beta 3
+
+11-JUN-2018: 8.7.7
+
+- Fixes editing nested links in Firefox after Gliffy import [7098]
+
+06-JUN-2018: 8.7.6
+
+- Fixes proxy servlet response headers
+- Ignores invalid Iconfinder response
+- Adds email in Google user info
+
+05-JUN-2018: 8.7.5
+
+- Uses mxGraph 3.9.7 beta 2
+- Uses mxgraph-core 3.9.6
+
+03-JUN-2018: 8.7.4
+
+- Fixes possible SSRF in proxy servlet
+
+02-JUN-2018: 8.7.3
+
+- Fixes overridden layout menu
+- Uses mxGraph 3.9.7 beta 1
+
+01-JUN-2018: 8.7.2
+
+- Changes to Confluence Cloud image servlet
+
+01-JUN-2018: 8.7.1
+
+- Moves import CSV to insert menu
+
+31-MAY-2018: 8.7.0
+
+- Adds editableCssRules style
+- Uses mxGraph 3.9.6
+
+29-MAY-2018: 8.6.9
+
+- Adds enableCustomLibraries switch
+- Fixes math rendering timing bug
+- Uses mxGraph 3.9.6 beta 1
+- Uses MathJax 2.7.4
+
+24-MAY-2018: 8.6.8
+
+- Fixes math typesetting in PDF export
+- Fixes NPE in minimal UI
+- Uses mxGraph 3.9.5
+
+23-MAY-2018: 8.6.7
+
+- Adds #S parameter for loading from CSV source
+- Adds support for VSD files in cloud storage
+- Adds Lucidchart support for #U parameter
+
+22-MAY-2018: 8.6.6
+
+- Fixes enabled state for some menu items
+- Moves SQL and PlantUML to insert menu
+- Fixes loading libraries from OneDrive
+- Adds reverse edge to context menu
+
+17-MAY-2018: 8.6.5
+
+- Fixes timing error for export in Safari
+- Fixes change UI font size bug
+- Uses mxGraph 3.9.4
+- Fixes minor bugs
+
+14-MAY-2018: 8.6.4
+
+- Improvements to electron build
+
+11-MAY-2018: 8.6.3
+
+- Adds F5 icons plugin
+
 09-MAY-2018: 8.6.2
 
 - Replaces domain apex redirect

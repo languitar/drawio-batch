@@ -567,6 +567,9 @@ Graph = function(container, model, renderHint, stylesheet, themes)
 	    };
 
 	    // Activates outline connect after 1500ms with touch event or if alt is pressed inside the shape
+	    // outlineConnect=0 is a custom style that means do not connect to strokes inside the shape,
+	    // or in other words, connect to the shape's perimeter if the highlight is under the mouse
+	    // (the name is because the highlight, including all strokes, is called outline in the code)
 	    var connectionHandleIsOutlineConnectEvent = this.connectionHandler.isOutlineConnectEvent;
 	    
 	    this.connectionHandler.isOutlineConnectEvent = function(me)
@@ -637,9 +640,9 @@ Graph = function(container, model, renderHint, stylesheet, themes)
 					
 					if (link != null)
 					{
-						if (this.isPageLink(link))
+						if (this.isCustomLink(link))
 						{
-							this.pageLinkClicked(cell, link);
+							this.customLinkClicked(cell, link);
 						}
 						else
 						{
@@ -1114,7 +1117,7 @@ Graph.prototype.labelLinkClicked = function(state, elt, evt)
 {
 	var href = elt.getAttribute('href');
 	
-	if (href != null && !this.isPageLink(href) && (mxEvent.isLeftMouseButton(evt) &&
+	if (href != null && !this.isCustomLink(href) && (mxEvent.isLeftMouseButton(evt) &&
 		!mxEvent.isPopupTrigger(evt)) || mxEvent.isTouchEvent(evt))
 	{
 		if (!this.isEnabled() || this.isCellLocked(state.cell))
@@ -1168,17 +1171,25 @@ Graph.prototype.openLink = function(href, target)
 /**
  * Adds support for page links.
  */
-Graph.prototype.isPageLink = function(href)
+Graph.prototype.getLinkTitle = function(href)
 {
-	return false;
+	return href.substring(href.lastIndexOf('/') + 1);
 };
 
 /**
  * Adds support for page links.
  */
-Graph.prototype.pageLinkClicked = function(cell, href)
+Graph.prototype.isCustomLink = function(href)
 {
-	this.fireEvent(new mxEventObject('pageLinkClicked', 'cell', cell, 'href', href));
+	return href.substring(0, 5) == 'data:';
+};
+
+/**
+ * Adds support for page links.
+ */
+Graph.prototype.customLinkClicked = function(cell, href)
+{
+	this.fireEvent(new mxEventObject('customLinkClicked', 'cell', cell, 'href', href));
 };
 
 /**
@@ -1376,13 +1387,12 @@ Graph.prototype.isReplacePlaceholders = function(cell)
 
 /**
  * Returns true if the given mouse wheel event should be used for zooming. This
- * is invoked if no dialogs are showing and returns true if Alt or Control
- * (except macOS) is pressed or if the panning handler is active.
+ * is invoked if no dialogs are showing and returns true with Alt or Control
+ * (except macOS) is pressed.
  */
 Graph.prototype.isZoomWheelEvent = function(evt)
 {
-	return mxEvent.isAltDown(evt) || (mxEvent.isControlDown(evt) && !mxClient.IS_MAC) ||
-		(this.panningHandler != null && this.panningHandler.isActive());
+	return mxEvent.isAltDown(evt) || (mxEvent.isControlDown(evt) && !mxClient.IS_MAC);
 };
 
 /**
@@ -2532,7 +2542,7 @@ Graph.prototype.getTooltipForCell = function(cell)
 
 			for (var i = 0; i < temp.length; i++)
 			{
-				if (temp[i].name != 'link' || !this.isPageLink(temp[i].value))
+				if (temp[i].name != 'link' || !this.isCustomLink(temp[i].value))
 				{
 					tip += ((temp[i].name != 'link') ? temp[i].name + ':' : '') +
 						mxUtils.htmlEntities(temp[i].value) + '\n';
@@ -3858,20 +3868,23 @@ HoverIcons.prototype.setCurrentState = function(state)
 	        var nearest = null;
 	        var dist = null;
 	    
-	        for (var i = 0; i < constraints.length; i++)
+	        if (constraints != null)
 	        {
-	            var cp = this.graph.getConnectionPoint(start, constraints[i]);
-	            
-	            if (cp != null)
-	            {
-	                var tmp = (cp.x - pt.x) * (cp.x - pt.x) + (cp.y - pt.y) * (cp.y - pt.y);
-	            
-	                if (dist == null || tmp < dist)
-	                {
-	                    nearest = cp;
-	                    dist = tmp;
-	                }
-	            }
+		        for (var i = 0; i < constraints.length; i++)
+		        {
+		            var cp = this.graph.getConnectionPoint(start, constraints[i]);
+		            
+		            if (cp != null)
+		            {
+		                var tmp = (cp.x - pt.x) * (cp.x - pt.x) + (cp.y - pt.y) * (cp.y - pt.y);
+		            
+		                if (dist == null || tmp < dist)
+		                {
+		                    nearest = cp;
+		                    dist = tmp;
+		                }
+		            }
+		        }
 	        }
 	        
 	        if (nearest != null)
@@ -4314,7 +4327,18 @@ if (typeof mxVertexHandler != 'undefined')
 			
 			return marker;
 		};
-		
+
+		/**
+		 * Function: isCellLocked
+		 * 
+		 * Returns true if the given cell does not allow new connections to be created.
+		 * This implementation returns false.
+		 */
+		mxConnectionHandler.prototype.isCellEnabled = function(cell)
+		{
+			return !this.graph.isCellLocked(cell);
+		};
+
 		/**
 		 * 
 		 */
@@ -5912,7 +5936,18 @@ if (typeof mxVertexHandler != 'undefined')
 			// Implements ignoreSelection flag
 			imgExport.drawCellState = function(state, canvas)
 			{
-				if (ignoreSelection || state.view.graph.isCellSelected(state.cell))
+				var graph = state.view.graph;
+				var selected = graph.isCellSelected(state.cell);
+				var parent = graph.model.getParent(state.cell);
+				
+				// Checks if parent cell is selected
+				while (!ignoreSelection && !selected && parent != null)
+				{
+					selected = graph.isCellSelected(parent);
+					parent = graph.model.getParent(parent);
+				}
+				
+				if (ignoreSelection || selected)
 				{
 					imgExportDrawCellState.apply(this, arguments);
 				}
@@ -6134,7 +6169,11 @@ if (typeof mxVertexHandler != 'undefined')
 			
 			var a = document.createElement('a');
 			a.setAttribute('href', this.getAbsoluteUrl(link));
-			a.setAttribute('title', link);
+			
+			if (link != null && !this.isCustomLink(link))
+			{
+				a.setAttribute('title', link);
+			}
 			
 			if (this.linkTarget != null)
 			{
@@ -7679,7 +7718,7 @@ if (typeof mxVertexHandler != 'undefined')
 					if (this.graph.isEnabled() && typeof this.graph.editLink === 'function')
 					{
 						var changeLink = document.createElement('img');
-						changeLink.setAttribute('src', IMAGE_PATH + '/edit.gif');
+						changeLink.setAttribute('src', Editor.editImage);
 						changeLink.setAttribute('title', mxResources.get('editLink'));
 						changeLink.setAttribute('width', '11');
 						changeLink.setAttribute('height', '11');
