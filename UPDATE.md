@@ -6,7 +6,7 @@
 
 ## Version bump
 
-    git fetch rawio
+    git fetch drawio
     git subtree -d pull -P "drawio" --squash -- drawio vXXXX
     sed -i'' 's/"version": ".*"/"version": "'$(cat drawio/VERSION)'"/' package.json
     npm update
