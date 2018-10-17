@@ -140,6 +140,55 @@ Actions.prototype.init = function()
 		}
 	});
 	
+	this.addAction('copySize', function(evt)
+	{
+		var cell = graph.getSelectionCell();
+		
+		if (graph.isEnabled() && cell != null && graph.getModel().isVertex(cell))
+		{
+			var geo = graph.getCellGeometry(cell);
+			
+			if (geo != null)
+			{
+				ui.copiedSize = new mxRectangle(geo.x, geo.y, geo.width, geo.height);
+			}
+		}
+	}, null, null, 'Alt+Shit+X');
+
+	this.addAction('pasteSize', function(evt)
+	{
+		if (graph.isEnabled() && !graph.isSelectionEmpty() && ui.copiedSize != null)
+		{
+			graph.getModel().beginUpdate();
+			
+			try
+			{
+				var cells = graph.getSelectionCells();
+				
+				for (var i = 0; i < cells.length; i++)
+				{
+					if (graph.getModel().isVertex(cells[i]))
+					{
+						var geo = graph.getCellGeometry(cells[i]);
+						
+						if (geo != null)
+						{
+							geo = geo.clone();
+							geo.width = ui.copiedSize.width;
+							geo.height = ui.copiedSize.height;
+							
+							graph.getModel().setGeometry(cells[i], geo);
+						}
+					}
+				}
+			}
+			finally
+			{
+				graph.getModel().endUpdate();
+			}
+		}
+	}, null, null, 'Alt+Shit+V');
+	
 	function deleteCells(includeEdges)
 	{
 		// Cancels interactive operations
@@ -257,13 +306,7 @@ Actions.prototype.init = function()
 	this.addAction('editData...', function()
 	{
 		var cell = graph.getSelectionCell() || graph.getModel().getRoot();
-		
-		if (cell != null)
-		{
-			var dlg = new EditDataDialog(ui, cell);
-			ui.showDialog(dlg.container, 340, 340, true, false, null, false);
-			dlg.init();
-		}
+		ui.showDataDialog(cell);
 	}, null, null, Editor.ctrlKey + '+M');
 	this.addAction('editTooltip...', function()
 	{
@@ -313,7 +356,7 @@ Actions.prototype.init = function()
 			ui.showLinkDialog(value, mxResources.get('apply'), function(link)
 			{
 				link = mxUtils.trim(link);
-    				graph.setLinkForCell(cell, (link.length > 0) ? link : null);
+    			graph.setLinkForCell(cell, (link.length > 0) ? link : null);
 			});
 		}
 	}, null, null, 'Alt+Shift+L');
@@ -383,7 +426,7 @@ Actions.prototype.init = function()
 				
 				// Workaround for FF returning the outermost selected element after double
 				// click on a DOM hierarchy with a link inside (but not as topmost element)
-				if (link == null)
+				if (link == null && elt != null && elt.getElementsByTagName != null)
 				{
 					// Finds all links in the selected DOM and uses the link
 					// where the selection text matches its text content
@@ -987,7 +1030,7 @@ Actions.prototype.init = function()
 			var model = graph.getModel();
 			
 	    	var dlg = new TextareaDialog(this.editorUi, mxResources.get('editStyle') + ':',
-	    			model.getStyle(cells[0]) || '', function(newValue)
+	    		model.getStyle(cells[0]) || '', function(newValue)
 			{
 	    		if (newValue != null)
 				{

@@ -178,14 +178,19 @@ GraphViewer.prototype.init = function(container, xmlNode, graphConfig)
 				
 				this.selectPageById = function(id)
 				{
+					var found = false;
+					
 					for (var i = 0; i < this.diagrams.length; i++)
 					{
 						if (this.diagrams[i].getAttribute('id') == id)
 						{
 							this.selectPage(i);
+							found = true;
 							break;
 						}
 					}
+					
+					return found;
 				};
 				
 				var update = mxUtils.bind(this, function()
@@ -244,7 +249,31 @@ GraphViewer.prototype.init = function(container, xmlNode, graphConfig)
 					translate: this.graph.view.translate.clone(),
 					scale: this.graph.view.scale
 				};
-
+				
+				var self = this;
+				
+				this.graph.customLinkClicked = function(href)
+				{
+					var done = true;
+					
+					if (href.substring(0, 13) == 'data:page/id,')
+					{
+						var comma = href.indexOf(',');
+						
+						if (!self.selectPageById(href.substring(comma + 1)))
+						{
+							done = false;
+							alert(mxResources.get('pageNotFound') || 'Page not found');
+						}
+					}
+					else
+					{
+						this.handleCustomLink(href);
+					}
+					
+					return done;
+				};
+				
 				if (this.graphConfig.toolbar != null)
 				{
 					this.addToolbar();
@@ -933,7 +962,7 @@ GraphViewer.prototype.addToolbar = function()
 			if (this.zoomEnabled)
 			{
 				addButton(mxUtils.bind(this, function()
-				{ 
+				{
 					this.graph.zoomOut();
 				}), Editor.zoomOutImage, mxResources.get('zoomOut') || 'Zoom Out');
 
@@ -1156,19 +1185,10 @@ GraphViewer.prototype.addClickHandler = function(graph, ui)
 				}, 0);
 			}
 		}
-		else if (href != null && graph.isCustomLink(href) && (mxEvent.isTouchEvent(evt) ||
-				!mxEvent.isPopupTrigger(evt)))
+		else if (href != null && ui == null && graph.isCustomLink(href) &&
+			(mxEvent.isTouchEvent(evt) || !mxEvent.isPopupTrigger(evt)) &&
+			graph.customLinkClicked(href))
 		{
-			if (href.substring(0, 13) == 'data:page/id,')
-			{
-				var comma = href.indexOf(',');
-				this.selectPageById(href.substring(comma + 1));
-			}
-			else
-			{
-				graph.handleCustomLink(href);
-			}
-			
 			mxEvent.consume(evt);
 		}
 	}), mxUtils.bind(this, function(evt)
@@ -1330,6 +1350,7 @@ GraphViewer.prototype.showLocalLightbox = function()
 	if (document.documentMode == null || document.documentMode >= 10)
 	{
 		Editor.prototype.editButtonLink = this.graphConfig.edit;
+		Editor.prototype.editButtonFunc = this.graphConfig.editFunc;
 	}
 	
 	EditorUi.prototype.updateActionStates = function() {};

@@ -944,7 +944,7 @@ Sidebar.prototype.addGeneralPalette = function(expand)
 	 	this.createVertexTemplateEntry('shape=tape;whiteSpace=wrap;html=1;', 120, 100, '', 'Tape'),
 	 	this.createVertexTemplateEntry('shape=note;whiteSpace=wrap;html=1;backgroundOutline=1;', 80, 100, '', 'Note'),
 	    this.createVertexTemplateEntry('shape=card;whiteSpace=wrap;html=1;', 80, 100, '', 'Card'),
-	    this.createVertexTemplateEntry('shape=callout;whiteSpace=wrap;html=1;perimeter=calloutPerimeter;', 120, 80, '', 'Callout'),
+	    this.createVertexTemplateEntry('shape=callout;whiteSpace=wrap;html=1;perimeter=calloutPerimeter;', 120, 80, '', 'Callout', null, null, 'bubble chat thought speech message'),
 	 	this.createVertexTemplateEntry('shape=umlActor;verticalLabelPosition=bottom;labelBackgroundColor=#ffffff;verticalAlign=top;html=1;outlineConnect=0;', 30, 60, 'Actor', 'Actor', false, null, 'user person human stickman'),
 	 	this.addEntry('curve', mxUtils.bind(this, function()
 	 	{
@@ -1317,8 +1317,8 @@ Sidebar.prototype.addUmlPalette = function(expand)
 			
 			return sb.createVertexTemplateFromCells([cell.clone()], cell.geometry.width, cell.geometry.height, 'Interface 2');
 		}),
-		this.createVertexTemplateEntry('shape=lollipop;direction=south;html=1;', 30, 10, '', 'Provided Interface', null, null, dt + 'provided interface'),
-		this.createVertexTemplateEntry('shape=requires;direction=north;html=1;', 30, 20, '', 'Required Interface', null, null, dt + 'required interface'),
+		this.createVertexTemplateEntry('shape=providedRequiredInterface;html=1;verticalLabelPosition=bottom;', 20, 20, '', 'Provided/Required Interface', null, null, dt + 'provided required interface'),
+		this.createVertexTemplateEntry('shape=requiredInterface;html=1;verticalLabelPosition=bottom;', 10, 20, '', 'Required Interface', null, null, dt + 'required interface'),
 		this.createVertexTemplateEntry('shape=umlBoundary;whiteSpace=wrap;html=1;', 100, 80, 'Boundary Object', 'Boundary Object', null, null, 'uml boundary object'),
 		this.createVertexTemplateEntry('ellipse;shape=umlEntity;whiteSpace=wrap;html=1;', 80, 80, 'Entity Object', 'Entity Object', null, null, 'uml entity object'),
 		this.createVertexTemplateEntry('ellipse;shape=umlControl;whiteSpace=wrap;html=1;', 70, 80, 'Control Object', 'Control Object', null, null, 'uml control object'),
@@ -2089,6 +2089,10 @@ Sidebar.prototype.createDropHandler = function(cells, allowSplit, allowCellsInse
 							graph.fireEvent(new mxEventObject('cellsInserted', 'cells', select));
 						}
 					}
+					catch (e)
+					{
+						this.editorUi.handleError(e);
+					}
 					finally
 					{
 						graph.model.endUpdate();
@@ -2243,6 +2247,10 @@ Sidebar.prototype.dropAndConnect = function(source, targets, direction, dropCell
 			}
 			
 			graph.fireEvent(new mxEventObject('cellsInserted', 'cells', targets));
+		}
+		catch (e)
+		{
+			this.editorUi.handleError(e);
 		}
 		finally
 		{
@@ -2471,11 +2479,10 @@ Sidebar.prototype.createDragSource = function(elt, dropHandler, preview, cells, 
 		{
 			this.editorUi.hoverIcons.update(graph.view.getState(graph.getSelectionCell()));
 		}
-	}),
-	preview, 0, 0, this.editorUi.editor.graph.autoscroll, true, true);
+	}), preview, 0, 0, graph.autoscroll, true, true);
 	
 	// Stops dragging if cancel is pressed
-	this.editorUi.editor.graph.addListener(mxEvent.ESCAPE, function(sender, evt)
+	graph.addListener(mxEvent.ESCAPE, function(sender, evt)
 	{
 		if (dragSource.isActive())
 		{
@@ -3146,6 +3153,16 @@ Sidebar.prototype.itemClicked = function(cells, ds, evt, elt)
 	else
 	{
 		var pt = graph.getFreeInsertPoint();
+		
+		if (mxEvent.isShiftDown(evt))
+		{
+			var bounds = graph.getGraphBounds();
+			var tr = graph.view.translate;
+			var s = graph.view.scale;
+			pt.x = bounds.x / s - tr.x + bounds.width / s + graph.gridSize;
+			pt.y = bounds.y / s - tr.y;
+		}
+		
 		ds.drop(graph, evt, null, pt.x, pt.y, true);
 		
 		if (this.editorUi.hoverIcons != null && (mxEvent.isTouchEvent(evt) || mxEvent.isPenEvent(evt)))
@@ -3161,33 +3178,53 @@ Sidebar.prototype.itemClicked = function(cells, ds, evt, elt)
 Sidebar.prototype.addClickHandler = function(elt, ds, cells)
 {
 	var graph = this.editorUi.editor.graph;
+	var oldMouseDown = ds.mouseDown;
+	var oldMouseMove = ds.mouseMove;
 	var oldMouseUp = ds.mouseUp;
+	var tol = graph.tolerance;
 	var first = null;
+	var sb = this;
 	
-	mxEvent.addGestureListeners(elt, function(evt)
+	ds.mouseDown =function(evt)
 	{
+		oldMouseDown.apply(this, arguments);
 		first = new mxPoint(mxEvent.getClientX(evt), mxEvent.getClientY(evt));
-	});
-	
-	ds.mouseUp = mxUtils.bind(this, function(evt)
-	{
-		if (!mxEvent.isPopupTrigger(evt) && this.currentGraph == null && first != null)
+		
+		if (this.dragElement != null)
 		{
-			var tol = graph.tolerance;
-			
-			if (Math.abs(first.x - mxEvent.getClientX(evt)) <= tol &&
-				Math.abs(first.y - mxEvent.getClientY(evt)) <= tol)
-			{
-				this.itemClicked(cells, ds, evt, elt);
-			}
+			this.dragElement.style.display = 'none';
+			mxUtils.setOpacity(elt, 50);
+		}
+	};
+	
+	ds.mouseMove = function(evt)
+	{
+		if (this.dragElement != null && this.dragElement.style.display == 'none' &&
+			first != null && (Math.abs(first.x - mxEvent.getClientX(evt)) > tol ||
+			Math.abs(first.y - mxEvent.getClientY(evt)) > tol))
+		{
+			this.dragElement.style.display = '';
+			mxUtils.setOpacity(elt, 100);
+		}
+		
+		oldMouseMove.apply(this, arguments);
+	};
+	
+	ds.mouseUp = function(evt)
+	{
+		if (!mxEvent.isPopupTrigger(evt) && this.currentGraph == null &&
+			this.dragElement != null && this.dragElement.style.display == 'none')
+		{
+			sb.itemClicked(cells, ds, evt, elt);
 		}
 
 		oldMouseUp.apply(ds, arguments);
+		mxUtils.setOpacity(elt, 100);
 		first = null;
 		
 		// Blocks tooltips on this element after single click
-		this.currentElt = elt;
-	});
+		sb.currentElt = elt;
+	};
 };
 
 /**
@@ -3365,13 +3402,14 @@ Sidebar.prototype.addFoldingHandler = function(title, content, funct)
 					
 					window.setTimeout(function()
 					{
-						var fo = mxClient.NO_FO;
-						mxClient.NO_FO = Editor.prototype.originalNoForeignObject;
-						funct(content);
-						mxClient.NO_FO = fo;
 						content.style.display = 'block';
 						title.style.cursor = '';
 						title.innerHTML = prev;
+
+						var fo = mxClient.NO_FO;
+						mxClient.NO_FO = Editor.prototype.originalNoForeignObject;
+						funct(content, title);
+						mxClient.NO_FO = fo;
 					}, 0);
 				}
 				else

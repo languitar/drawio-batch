@@ -27,6 +27,6 @@
     "electron-log": "^2.2.14"
   },
   "devDependencies": {
-    "electron": "^1.8.6"
+    "electron": "^2.0.2"
   }
 }
