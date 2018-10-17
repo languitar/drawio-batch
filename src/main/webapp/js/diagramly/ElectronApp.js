@@ -80,6 +80,11 @@ FeedbackDialog.feedbackUrl = 'https://log.draw.io/email';
 		menusInit.apply(this, arguments);
 
 		var editorUi = this.editorUi;
+
+		editorUi.actions.put('useOffline', new Action(mxResources.get('useOffline') + '...', function()
+		{
+			editorUi.openLink('https://www.draw.io/')
+		}));
 		
 		// Replaces file menu to replace openFrom menu with open and rename downloadAs to export
 		this.put('file', new Menu(mxUtils.bind(this, function(menu, parent)
@@ -88,27 +93,10 @@ FeedbackDialog.feedbackUrl = 'https://log.draw.io/email';
 			this.addSubmenu('exportAs', menu, parent);
 			menu.addSeparator(parent);
 			this.addSubmenu('embed', menu, parent);
-			this.addSubmenu('publish', menu, parent);
 			menu.addSeparator(parent);
 			this.addMenuItems(menu, ['newLibrary', 'openLibrary', '-', 'pageSetup',
 				'print', '-', 'close'], parent);
 			// LATER: Find API for application.quit
-		})));
-		
-		this.put('extras', new Menu(mxUtils.bind(this, function(menu, parent)
-		{
-			this.addSubmenu('theme', menu, parent);
-			menu.addSeparator(parent);
-			this.addMenuItems(menu, ['copyConnect', 'collapseExpand', '-'], parent);
-
-			if (typeof(MathJax) !== 'undefined')
-			{
-				var item = this.addMenuItem(menu, 'mathematicalTypesetting', parent);
-				this.addLinkToItem(item, 'https://desk.draw.io/support/solutions/articles/16000032875');
-			}
-			
-			this.addMenuItems(menu, ['autosave', '-', 'createShape', 'editDiagram', '-',
-				'plugins', 'tags', '-', 'online'], parent);
 		})));
 	};
 	
@@ -183,31 +171,36 @@ FeedbackDialog.feedbackUrl = 'https://log.draw.io/email';
 			           
 		        if (paths !== undefined && paths[0] != null)
 		        {
-			        	var path = paths[0];
-			        	var asImage = /\.png$/i.test(path) || /\.gif$/i.test(path) || /\.jpe?g$/i.test(path);
-			        	var encoding = (asImage || /\.vsdx$/i.test(path) || /\.vssx$/i.test(path)) ?
-			        		'base64' : 'utf-8';
+		        	var path = paths[0];
+		        	var asImage = /\.png$/i.test(path) || /\.gif$/i.test(path) || /\.jpe?g$/i.test(path);
+		        	var encoding = (asImage || /\.vsdx$/i.test(path) || /\.vssx$/i.test(path)) ?
+		        		'base64' : 'utf-8';
 
 					if (editorUi.spinner.spin(document.body, mxResources.get('loading')))
 					{
 						var fs = require('fs');
 
 						fs.readFile(path, encoding, mxUtils.bind(this, function (e, data)
+				        {
+			        		if (e)
+			        		{
+			        			editorUi.spinner.stop();
+			        			editorUi.handleError(e);
+			        		}
+			        		else
 				        	{
-				        		if (e)
-				        		{
-				        			editorUi.spinner.stop();
-				        			editorUi.handleError(e);
-				        		}
-				        		else
-				        		{
 								try
 								{
-									if (data.substring(0, 26) == '{"state":"{\\"Properties\\":')
+									if (editorUi.isLucidChartData(data))
 									{
-										editorUi.importLucidChart(data, 0, 0, null, function()
+										editorUi.convertLucidChart(data, function(xml)
 										{
 											editorUi.spinner.stop();
+											graph.setSelectionCells(editorUi.importXml(xml));
+										}, function(e)
+										{
+											editorUi.spinner.stop();
+											editorUi.handleError(e);
 										});
 									}
 									else if  (/(\.vsdx)($|\?)/i.test(path))
@@ -215,7 +208,7 @@ FeedbackDialog.feedbackUrl = 'https://log.draw.io/email';
 										editorUi.importVisio(editorUi.base64ToBlob(data, 'application/octet-stream'), function(xml)
 										{
 											editorUi.spinner.stop();
-											editorUi.editor.graph.setSelectionCells(editorUi.insertTextAt(xml, 0, 0, true));
+											graph.setSelectionCells(editorUi.importXml(xml));
 										});
 									}
 									else if (!editorUi.isOffline() && new XMLHttpRequest().upload && editorUi.isRemoteFileFormat(data, path))
@@ -229,7 +222,7 @@ FeedbackDialog.feedbackUrl = 'https://log.draw.io/email';
 												
 												if (xhr.status >= 200 && xhr.status <= 299)
 												{
-													editorUi.editor.graph.setSelectionCells(editorUi.insertTextAt(xhr.responseText, 0, 0, true));
+													graph.setSelectionCells(editorUi.importXml(xhr.responseText));
 												}
 											}
 										}), path);
@@ -247,40 +240,40 @@ FeedbackDialog.feedbackUrl = 'https://log.draw.io/email';
 											}
 										}
 										else if (/\.svg$/i.test(path))
-							    			{
-												// LATER: Use importXml without throwing exception if no data
-							    				// Checks if SVG contains content attribute
-						    					var root = mxUtils.parseXml(data);
-					    						var svgs = root.getElementsByTagName('svg');
-					    						
-					    						if (svgs.length > 0)
+						    			{
+											// LATER: Use importXml without throwing exception if no data
+						    				// Checks if SVG contains content attribute
+					    					var root = mxUtils.parseXml(data);
+				    						var svgs = root.getElementsByTagName('svg');
+				    						
+				    						if (svgs.length > 0)
+					    					{
+				    							var svgRoot = svgs[0];
+						    					var cont = svgRoot.getAttribute('content');
+		
+						    					if (cont != null && cont.charAt(0) != '<' && cont.charAt(0) != '%')
 						    					{
-					    							var svgRoot = svgs[0];
-							    					var cont = svgRoot.getAttribute('content');
-			
-							    					if (cont != null && cont.charAt(0) != '<' && cont.charAt(0) != '%')
-							    					{
-							    						cont = unescape((window.atob) ? atob(cont) : Base64.decode(cont, true));
-							    					}
-							    					
-							    					if (cont != null && cont.charAt(0) == '%')
-							    					{
-							    						cont = decodeURIComponent(cont);
-							    					}
-			
-							    					if (cont != null && (cont.substring(0, 8) === '<mxfile ' ||
-							    						cont.substring(0, 14) === '<mxGraphModel '))
-							    					{
-							    						asImage = false;
-							    						data = cont;
-							    					}
-							    					else
-							    					{
-							    						asImage = true;
-							    						data = btoa(data);
-							    					}
+						    						cont = unescape((window.atob) ? atob(cont) : Base64.decode(cont, true));
 						    					}
-							    			}
+						    					
+						    					if (cont != null && cont.charAt(0) == '%')
+						    					{
+						    						cont = decodeURIComponent(cont);
+						    					}
+		
+						    					if (cont != null && (cont.substring(0, 8) === '<mxfile ' ||
+						    						cont.substring(0, 14) === '<mxGraphModel '))
+						    					{
+						    						asImage = false;
+						    						data = cont;
+						    					}
+						    					else
+						    					{
+						    						asImage = true;
+						    						data = btoa(data);
+						    					}
+					    					}
+						    			}
 										
 										if (asImage)
 										{
@@ -327,8 +320,8 @@ FeedbackDialog.feedbackUrl = 'https://log.draw.io/email';
 									editorUi.spinner.stop();
 									editorUi.handleError(e);
 								}
-				        		}
-				        	}));
+			        		}
+			        	}));
 					}
 		        }
 			}
@@ -343,10 +336,10 @@ FeedbackDialog.feedbackUrl = 'https://log.draw.io/email';
 			{
 				oldNew();
 			}
-			else {
+			else
+			{
 				const ipc = require('electron').ipcRenderer
 				ipc.sendSync('winman', {action: 'newfile', opt: {width: 1600}})
-
 			}
 		}), null, null, Editor.ctrlKey + '+N');
 		
@@ -642,10 +635,6 @@ FeedbackDialog.feedbackUrl = 'https://log.draw.io/email';
 				this.fileObject.type = 'utf-8';
 				fn();
 			}
-	        else if (error != null)
-			{
-				error();
-			}
 		}
 		else
 		{
@@ -681,10 +670,6 @@ FeedbackDialog.feedbackUrl = 'https://log.draw.io/email';
 			this.fileObject.name = path.replace(/^.*[\\\/]/, '');
 			this.fileObject.type = 'utf-8';
 			this.save(false, success, error);
-		}
-        else if (error != null)
-		{
-			error();
 		}
 	};
 

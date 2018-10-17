@@ -28,6 +28,16 @@ Format.prototype.showCloseButton = true;
 Format.prototype.inactiveTabBackgroundColor = '#d7d7d7';
 
 /**
+ * Background color for inactive tabs.
+ */
+Format.prototype.roundableShapes = ['label', 'rectangle', 'internalStorage', 'corner',
+	'parallelogram', 'swimlane', 'triangle', 'trapezoid',
+	'ext', 'step', 'tee', 'process', 'link',
+	'rhombus', 'offPageConnector', 'loopLimit', 'hexagon',
+	'manualInput', 'curlyBracket', 'singleArrow', 'callout',
+	'doubleArrow', 'flexArrow', 'card', 'umlLifeline'];
+
+/**
  * Adds the label menu items to the given menu and parent.
  */
 Format.prototype.init = function()
@@ -245,14 +255,9 @@ Format.prototype.isGlassState = function(state)
  */
 Format.prototype.isRoundedState = function(state)
 {
-	var shape = mxUtils.getValue(state.style, mxConstants.STYLE_SHAPE, null);
-	
-	return (shape == 'label' || shape == 'rectangle' || shape == 'internalStorage' || shape == 'corner' ||
-			shape == 'parallelogram' || shape == 'swimlane' || shape == 'triangle' || shape == 'trapezoid' ||
-			shape == 'ext' || shape == 'step' || shape == 'tee' || shape == 'process' || shape == 'link' ||
-			shape == 'rhombus' || shape == 'offPageConnector' || shape == 'loopLimit' || shape == 'hexagon' ||
-			shape == 'manualInput' || shape == 'curlyBracket' || shape == 'singleArrow' || shape == 'callout' ||
-			shape == 'doubleArrow' || shape == 'flexArrow' || shape == 'card' || shape == 'umlLifeline');
+	return (state.shape != null) ? state.shape.isRoundable() :
+		mxUtils.indexOf(this.roundableShapes, mxUtils.getValue(state.style,
+		mxConstants.STYLE_SHAPE, null)) >= 0;
 };
 
 /**
@@ -1536,11 +1541,53 @@ ArrangePanel.prototype.addGroupOps = function(div)
 			ui.actions.get('ungroup').funct();
 		})
 		
-		btn.setAttribute('title', mxResources.get('ungroup') + ' (' + this.editorUi.actions.get('ungroup').shortcut + ')');
+		btn.setAttribute('title', mxResources.get('ungroup') + ' (' +
+			this.editorUi.actions.get('ungroup').shortcut + ')');
 		btn.style.width = '202px';
 		btn.style.marginBottom = '2px';
 		div.appendChild(btn);
 		count++;
+	}
+	
+	if (ss.vertices.length > 0)
+	{
+		if (count > 0)
+		{
+			mxUtils.br(div);
+			count = 0;
+		}
+		
+		var btn = mxUtils.button(mxResources.get('copySize'), function(evt)
+		{
+			ui.actions.get('copySize').funct();
+		});
+		
+		btn.setAttribute('title', mxResources.get('copySize') + ' (' +
+			this.editorUi.actions.get('copySize').shortcut + ')');
+		btn.style.width = '202px';
+		btn.style.marginBottom = '2px';
+
+		div.appendChild(btn);
+		count++;
+		
+		if (ui.copiedSize != null)
+		{
+			var btn2 = mxUtils.button(mxResources.get('pasteSize'), function(evt)
+			{
+				ui.actions.get('pasteSize').funct();
+			});
+			
+			btn2.setAttribute('title', mxResources.get('pasteSize') + ' (' +
+				this.editorUi.actions.get('pasteSize').shortcut + ')');
+			
+			div.appendChild(btn2);
+			count++;
+			
+			btn.style.width = '100px';
+			btn.style.marginBottom = '2px';
+			btn2.style.width = '100px';
+			btn2.style.marginBottom = '2px';
+		}
 	}
 	
 	if (graph.getSelectionCount() == 1 && graph.getModel().isVertex(cell) &&
@@ -2399,7 +2446,7 @@ TextFormatPanel.prototype.addFont = function(container)
 		var cssPanel = stylePanel.cloneNode();
 		
 		var cssMenu = this.editorUi.toolbar.addMenu(mxResources.get('style'),
-			mxResources.get('style'), true, 'formatBlock', cssPanel);
+			mxResources.get('style'), true, 'formatBlock', cssPanel, null, true);
 		cssMenu.style.color = 'rgb(112, 112, 112)';
 		cssMenu.style.whiteSpace = 'nowrap';
 		cssMenu.style.overflow = 'hidden';
@@ -2426,8 +2473,9 @@ TextFormatPanel.prototype.addFont = function(container)
 	colorPanel.style.borderTop = '1px solid #c0c0c0';
 	colorPanel.style.paddingTop = '6px';
 	colorPanel.style.paddingBottom = '6px';
-
-	var fontMenu = this.editorUi.toolbar.addMenu('Helvetica', mxResources.get('fontFamily'), true, 'fontFamily', stylePanel);
+	
+	var fontMenu = this.editorUi.toolbar.addMenu('Helvetica', mxResources.get('fontFamily'),
+		true, 'fontFamily', stylePanel, null, true);
 	fontMenu.style.color = 'rgb(112, 112, 112)';
 	fontMenu.style.whiteSpace = 'nowrap';
 	fontMenu.style.overflow = 'hidden';
@@ -3122,37 +3170,37 @@ TextFormatPanel.prototype.addFont = function(container)
 		
 		var btns = [
 		        this.editorUi.toolbar.addButton('geSprite-insertcolumnbefore', mxResources.get('insertColumnBefore'),
-				function()
+	     		mxUtils.bind(this, function()
 				{
 					try
 					{
-				        	if (currentTable != null)
-				        	{
-				        		graph.selectNode(graph.insertColumn(currentTable, (tableCell != null) ? tableCell.cellIndex : 0));
-				        	}
+				       	if (currentTable != null)
+				       	{
+				       		graph.selectNode(graph.insertColumn(currentTable, (tableCell != null) ? tableCell.cellIndex : 0));
+				       	}
 					}
 					catch (e)
 					{
-						alert(e);
+						this.editorUi.handleError(e);
 					}
-				}, tablePanel),
+				}), tablePanel),
 				this.editorUi.toolbar.addButton('geSprite-insertcolumnafter', mxResources.get('insertColumnAfter'),
-				function()
+				mxUtils.bind(this, function()
 				{
 					try
 					{
 						if (currentTable != null)
-				        	{
-								graph.selectNode(graph.insertColumn(currentTable, (tableCell != null) ? tableCell.cellIndex + 1 : -1));
-				        	}
+				       	{
+							graph.selectNode(graph.insertColumn(currentTable, (tableCell != null) ? tableCell.cellIndex + 1 : -1));
+				       	}
 					}
 					catch (e)
 					{
-						alert(e);
+						this.editorUi.handleError(e);
 					}
-				}, tablePanel),
+				}), tablePanel),
 				this.editorUi.toolbar.addButton('geSprite-deletecolumn', mxResources.get('deleteColumn'),
-				function()
+				mxUtils.bind(this, function()
 				{
 					try
 					{
@@ -3163,11 +3211,11 @@ TextFormatPanel.prototype.addFont = function(container)
 					}
 					catch (e)
 					{
-						alert(e);
+						this.editorUi.handleError(e);
 					}
-				}, tablePanel),
+				}), tablePanel),
 				this.editorUi.toolbar.addButton('geSprite-insertrowbefore', mxResources.get('insertRowBefore'),
-				function()
+				mxUtils.bind(this, function()
 				{
 					try
 					{
@@ -3178,11 +3226,11 @@ TextFormatPanel.prototype.addFont = function(container)
 					}
 					catch (e)
 					{
-						alert(e);
+						this.editorUi.handleError(e);
 					}
-				}, tablePanel),
+				}), tablePanel),
 				this.editorUi.toolbar.addButton('geSprite-insertrowafter', mxResources.get('insertRowAfter'),
-				function()
+				mxUtils.bind(this, function()
 				{
 					try
 					{
@@ -3193,11 +3241,11 @@ TextFormatPanel.prototype.addFont = function(container)
 					}
 					catch (e)
 					{
-						alert(e);
+						this.editorUi.handleError(e);
 					}
-				}, tablePanel),
+				}), tablePanel),
 				this.editorUi.toolbar.addButton('geSprite-deleterow', mxResources.get('deleteRow'),
-				function()
+				mxUtils.bind(this, function()
 				{
 					try
 					{
@@ -3208,9 +3256,9 @@ TextFormatPanel.prototype.addFont = function(container)
 					}
 					catch (e)
 					{
-						alert(e);
+						this.editorUi.handleError(e);
 					}
-				}, tablePanel)];
+				}), tablePanel)];
 		this.styleButtons(btns);
 		btns[2].style.marginRight = '9px';
 		

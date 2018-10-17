@@ -645,8 +645,8 @@ DriveClient.prototype.getFile = function(id, success, error, readXml, readLibrar
 			{
 				var binary = /\.png$/i.test(resp.title);
 				
-				// Handles .vsdx, Gliffy and PNG+XML files by creating a temporary file
-				if (/\.vsdx?$/i.test(resp.title) || /\.gliffy$/i.test(resp.title) ||
+				// Handles .vsdx, .vsd, .vdx, Gliffy and PNG+XML files by creating a temporary file
+				if (/\.v(dx|sdx?)$/i.test(resp.title) || /\.gliffy$/i.test(resp.title) ||
 					(!this.ui.useCanvasForExport && binary))
 				{
 					var url = resp.downloadUrl + '&access_token=' + gapi.auth.getToken().access_token;
@@ -1260,13 +1260,13 @@ DriveClient.prototype.pickFile = function(fn, acceptAllFiles)
  */
 DriveClient.prototype.pickFolder = function(fn)
 {
+	this.folderPickerCallback = fn;
+
 	// Picker is initialized once and points to this function
 	// which is overridden each time to the picker is shown
-	this.folderPickerCallback = fn;
-	
-	if (this.ui.spinner.spin(document.body, mxResources.get('authorizing')))
+	var showPicker = mxUtils.bind(this, function()
 	{
-		var showPicker = mxUtils.bind(this, function()
+		if (this.ui.spinner.spin(document.body, mxResources.get('authorizing')))
 		{
 			this.execute(mxUtils.bind(this, function()
 			{
@@ -1331,37 +1331,30 @@ DriveClient.prototype.pickFolder = function(fn)
 				        .setTitle(mxResources.get('pickFolder'))
 				        .setCallback(mxUtils.bind(this, function(data)
 				        {
-					        	if (data.action == google.picker.Action.PICKED ||
-					        		data.action == google.picker.Action.CANCEL)
-					        	{
-					        		mxEvent.removeListener(document, 'click', exit);
-					        	}
-					        	
-					        	if (data.action == google.picker.Action.CANCEL)
-					        	{
-					        		this.ui.confirm(mxResources.get('useRootFolder'), mxUtils.bind(this, function()
-					        		{
-					        			this.folderPickerCallback(data);
-					        		}), mxUtils.bind(this, function()
-					        		{
-					        			this.folderPickerCallback({action: google.picker.Action.PICKED,
-					        				docs: [{type: 'folder', id: 'root'}]});
-					        		}), mxResources.get('cancel'), mxResources.get('ok'));
-					        	}
-					        	else
-					        	{
-					        		this.folderPickerCallback(data);
-					        	}
+				        	if (data.action == google.picker.Action.PICKED ||
+				        		data.action == google.picker.Action.CANCEL)
+				        	{
+				        		mxEvent.removeListener(document, 'click', exit);
+				        	}
+				        	
+			        		this.folderPickerCallback(data);
 				        })).build();
 				}
 	
 				mxEvent.addListener(document, 'click', exit);
 				this[name].setVisible(true);
 			}));
-		});
-		
+		}
+	});
+	
+	this.ui.confirm(mxResources.get('useRootFolder'), mxUtils.bind(this, function()
+	{
+		this.folderPickerCallback({action: google.picker.Action.PICKED,
+			docs: [{type: 'folder', id: 'root'}]});
+	}), mxUtils.bind(this, function()
+	{
 		showPicker();
-	}
+	}), mxResources.get('yes'), mxResources.get('no'));
 };
 
 /**
