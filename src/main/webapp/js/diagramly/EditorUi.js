@@ -3635,7 +3635,8 @@
 	/**
 	 *
 	 */
-	EditorUi.prototype.exportSvg = function(scale, transparentBackground, ignoreSelection, addShadow, editable, embedImages, border, noCrop, currentPage)
+	EditorUi.prototype.exportSvg = function(scale, transparentBackground, ignoreSelection, addShadow,
+		editable, embedImages, border, noCrop, currentPage, linkTarget)
 	{
 		if (this.spinner.spin(document.body, mxResources.get('export')))
 		{
@@ -3656,7 +3657,9 @@
 			
 			// Sets or disables alternate text for foreignObjects. Disabling is needed
 			// because PhantomJS seems to ignore switch statements and paint all text.
-			var svgRoot = this.editor.graph.getSvg(bg, scale, border, noCrop, null, ignoreSelection);
+			var svgRoot = this.editor.graph.getSvg(bg, scale, border, noCrop, null,
+				ignoreSelection, null, null, (linkTarget == 'blank') ? '_blank' :
+				((linkTarget == 'self') ? '_top' : null));
 			
 			if (addShadow)
 			{
@@ -3984,19 +3987,13 @@
 			}
 		}
 		
-		if (allPages && this.pages != null && this.currentPage != null)
+		if (allPages)
 		{
-			for (var i = 0; i < this.pages.length; i++)
+			var index = this.getSelectedPageIndex();
+			
+			if (index > 0)
 			{
-				if (this.pages[i] == this.currentPage)
-				{
-					if (i > 0)
-					{
-						params.push('page=' + i);
-					}
-					
-					break;
-				}
+				params.push('page=' + index);
 			}
 		}
 		
@@ -4470,7 +4467,7 @@
 		mxUtils.write(hd, title);
 		hd.style.cssText = 'width:100%;text-align:center;margin-top:0px;margin-bottom:10px';
 		div.appendChild(hd);
-		
+
 		mxUtils.write(div, mxResources.get('zoom') + ':');
 		var zoomInput = document.createElement('input');
 		zoomInput.setAttribute('type', 'text');
@@ -4559,7 +4556,7 @@
 		
 		if (!hasPages)
 		{
-			allPages.style.visibility = 'hidden';
+			allPages.style.display = 'none';
 		}
 	
 		mxEvent.addListener(include, 'change', function()
@@ -4579,13 +4576,45 @@
 			allPages.setAttribute('disabled', 'disabled');
 		}
 		
+		var linkSelect = document.createElement('select');
+		linkSelect.style.maxWidth = '260px';
+		linkSelect.style.marginLeft = '8px';
+		linkSelect.style.marginRight = '10px';
+		linkSelect.className = 'geBtn';
+
+
+		var autoOption = document.createElement('option');
+		autoOption.setAttribute('value', 'auto');
+		mxUtils.write(autoOption, mxResources.get('automatic'));
+		linkSelect.appendChild(autoOption);
+
+		var blankOption = document.createElement('option');
+		blankOption.setAttribute('value', 'blank');
+		mxUtils.write(blankOption, mxResources.get('openInNewWindow'));
+		linkSelect.appendChild(blankOption);
+
+		var selfOption = document.createElement('option');
+		selfOption.setAttribute('value', 'self');
+		mxUtils.write(selfOption, mxResources.get('openInThisWindow'));
+		linkSelect.appendChild(selfOption);
+
+		if (format == 'svg')
+		{
+			mxUtils.write(div, mxResources.get('links') + ':');
+			div.appendChild(linkSelect);
+			mxUtils.br(div);
+			mxUtils.br(div);
+			height += 26;
+		}
+		
 		var dlg = new CustomDialog(this, div, mxUtils.bind(this, function()
 		{
 			this.lastExportBorder = borderInput.value;
 			this.lastExportZoom = zoomInput.value;
 			
 			callback(zoomInput.value, transparent.checked, !selection.checked, shadow.checked,
-				include.checked, cb5.checked, borderInput.value, cb6.checked, !allPages.checked);
+				include.checked, cb5.checked, borderInput.value, cb6.checked, !allPages.checked,
+				linkSelect.value);
 		}), null, btnLabel, helpLink);
 		this.showDialog(dlg.container, 340, height, true, true);
 		zoomInput.focus();
@@ -6735,6 +6764,13 @@
 								    				}));
 						    					}
 					    					}
+				    						else
+				    						{
+					    						barrier(index, mxUtils.bind(this, function()
+							    				{
+							    					return null;
+							    				}));
+				    						}
 						    			}
 						    			else
 						    			{
@@ -9064,7 +9100,8 @@
 		var graph = this.editor.graph;
 		
 		return {event: eventName, pageVisible: graph.pageVisible, translate: graph.view.translate,
-			scale: graph.view.scale, page: graph.view.getBackgroundPageBounds(), bounds: graph.getGraphBounds()};
+			bounds: graph.getGraphBounds(), currentPage: this.getSelectedPageIndex(),
+			scale: graph.view.scale, page: graph.view.getBackgroundPageBounds()};
 	};
 	
 	/**

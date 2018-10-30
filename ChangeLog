@@ -1,3 +1,30 @@
+26-OCT-2018: 9.3.1
+
+- Adds current page index to JSON protocol
+- Adds viewBox, target _top for SVG export
+- Fixes selectDescendants keystroke
+- Minor fixes for dark mode styles
+- Uses mxGraph 3.9.11 beta 2
+
+22-OCT-2018: 9.3.0
+
+- Adds write permission in OneDrive client
+- Adds link option in SVG export dialog
+- Adds link to save status message
+
+19-OCT-2018: 9.2.9
+
+- Adds OneDrive for Business and Sharepoint integration
+
+19-OCT-2018: 9.2.8
+
+- Improves various Gliffy import issues
+- Fixes inverted MovePage state after decoding
+
+15-OCT-2018: 9.2.7
+
+- Fixes local templates path
+
 14-OCT-2018: 9.2.6
 
 - Fixes possible NPE during delayed loading of plugins
