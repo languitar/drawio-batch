@@ -3077,6 +3077,10 @@ var NewDialog = function(editorUi, compact, showName, callback, createOnly, canc
 				{
 					realUrl = PROXY_URL + '?url=' + encodeURIComponent(realUrl);
 				}
+				else
+				{
+					realUrl = TEMPLATE_PATH + '/' + realUrl;
+				}
 				
 				mxUtils.get(realUrl, mxUtils.bind(this, function(req)
 				{
@@ -6412,11 +6416,11 @@ var MoreShapesDialog = function(editorUi, expanded, entries)
 	var newEntries = [];
 	
 	// Adds custom sections first
-	if (editorUi.sidebar.customLibraries != null)
+	if (editorUi.sidebar.customEntries != null)
 	{
-		for (var i = 0; i < editorUi.sidebar.customLibraries.length; i++)
+		for (var i = 0; i < editorUi.sidebar.customEntries.length; i++)
 		{
-			var section = editorUi.sidebar.customLibraries[i];
+			var section = editorUi.sidebar.customEntries[i];
 			var tmp = {title: editorUi.getResource(section.title), entries: []};
 			
 			for (var j = 0; j < section.entries.length; j++)
@@ -8621,7 +8625,7 @@ TemplatesDialog.prototype.init = function(editorUi, callback, cancelCallback,
 		templateFile, newDiagramCatsFile, username, recentDocsCallback, searchDocsCallback,
 		openExtDocCallback, linkToDiagramCallback)
 {
-	templateFile = (templateFile != null) ? templateFile : TEMPLATE_PATH + '/index.xml';
+	templateFile = (templateFile != null) ? templateFile : (TEMPLATE_PATH + '/index.xml');
 	newDiagramCatsFile = (newDiagramCatsFile != null) ? newDiagramCatsFile : NEW_DIAGRAM_CATS_PATH + '/index.xml';
 
 	var dlgDiv = this.container;
