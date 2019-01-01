@@ -197,13 +197,6 @@ var com;
 	                                    var graph_1 = this_1.createMxGraph();
 	                                    graph_1.getModel().beginUpdate();
 	                                    this_1.importPage(page_1, graph_1, graph_1.getDefaultParent());
-	                                    var backPage = page_1.getBackPage();
-	                                    if (backPage != null) {
-	                                        graph_1.getModel().setValue(graph_1.getDefaultParent(), page_1.getPageName());
-	                                        var backCell = new mxCell(backPage.getPageName());
-	                                        graph_1.addCell(backCell, graph_1.getModel().getRoot(), 0, null, null);
-	                                        this_1.importPage(backPage, graph_1, graph_1.getDefaultParent());
-	                                    }
 	                                    this_1.scaleGraph(graph_1, page_1.getPageScale() / page_1.getDrawingScale());
 	                                    graph_1.getModel().endUpdate();
 	                                    /* append */ (function (sb) { return sb.str = sb.str.concat(_this.RESPONSE_DIAGRAM_START); })(xmlBuilder);
@@ -573,7 +566,19 @@ var com;
                  * @param {*} parent The parent of the elements to be imported.
                  * @return {number}
                  */
-                mxVsdxCodec.prototype.importPage = function (page, graph, parent) {
+                mxVsdxCodec.prototype.importPage = function (page, graph, parent) 
+                {
+                	//BackPages can include another backPage, so it is recursive
+                	var backPage = page.getBackPage();
+                    
+                	if (backPage != null) 
+                    {
+                        graph.getModel().setValue(graph.getDefaultParent(), page.getPageName());
+                        var backCell = new mxCell(backPage.getPageName());
+                        graph.addCell(backCell, graph.getModel().getRoot(), 0, null, null);
+                        this.importPage(backPage, graph, graph.getDefaultParent());
+                    }
+                	
                 	//add page layers
                 	var layers = page.getLayers();
                 	this.layersMap[0] = graph.getDefaultParent();
@@ -1287,14 +1292,14 @@ var com;
                                              
                                         	 if (dScale != null) 
                                              {
-                                        		 dScaleV = parseFloat(dScale.getAttribute("V"));
+                                        		 dScaleV = parseFloat(dScale.getAttribute("V")) || 1;
                                              }
                                              
                                         	 var pScale = master.pageSheet["PageScale"];
                                              
                                         	 if (pScale != null) 
                                              {
-                                        		 pScaleV = parseFloat(pScale.getAttribute("V"));
+                                        		 pScaleV = parseFloat(pScale.getAttribute("V")) || 1;
                                              }
                                         	 
                                         	 scale = pScaleV / dScaleV;
@@ -1533,7 +1538,7 @@ var com;
                         }
                         /*private*/ RowFactory.getIndex = function (elem) {
                             try {
-                                return parseInt(elem.getAttribute("IX"));
+                                return parseInt(elem.getAttribute("IX")) || 1;
                             }
                             catch (e) {
                                 return 1;
@@ -2142,7 +2147,7 @@ var com;
                     }
                     mxVsdxGeometry.prototype.getIndex$org_w3c_dom_Element = function (elem) {
                         try {
-                            return parseInt(elem.getAttribute("IX"));
+                            return parseInt(elem.getAttribute("IX")) || 0;
                         }
                         catch (e) {
                             return 0;
@@ -2959,16 +2964,14 @@ var com;
                                                     var entry = array132[index131];
                                                     {
                                                         var page = entry.getValue();
-                                                        if (!page.isBackground()) {
-                                                            var backId = page.getBackPageId();
-                                                            if (backId != null) {
-                                                                var background = (function (m, k) { if (m.entries == null)
-                                                                    m.entries = []; for (var i = 0; i < m.entries.length; i++)
-                                                                    if (m.entries[i].key.equals != null && m.entries[i].key.equals(k) || m.entries[i].key === k) {
-                                                                        return m.entries[i].value;
-                                                                    } return null; })(backgroundMap, backId);
-                                                                page.setBackPage(background);
-                                                            }
+                                                        var backId = page.getBackPageId();
+                                                        if (backId != null) {
+                                                            var background = (function (m, k) { if (m.entries == null)
+                                                                m.entries = []; for (var i = 0; i < m.entries.length; i++)
+                                                                if (m.entries[i].key.equals != null && m.entries[i].key.equals(k) || m.entries[i].key === k) {
+                                                                    return m.entries[i].value;
+                                                                } return null; })(backgroundMap, backId);
+                                                            page.setBackPage(background);
                                                         }
                                                     }
                                                 }
@@ -3086,7 +3089,7 @@ var com;
                             return o1 === o2;
                         } })(backGround, com.mxgraph.io.vsdx.mxVsdxConstants.TRUE)) ? true : false;
                         var back = pageElem.getAttribute(com.mxgraph.io.vsdx.mxVsdxConstants.BACK_PAGE);
-                        if (!this.__isBackground && back != null && back.length > 0) {
+                        if (back != null && back.length > 0) {
                             this.backPageId = parseFloat(back);
                         }
                         this.Id = parseFloat(pageElem.getAttribute(com.mxgraph.io.vsdx.mxVsdxConstants.ID));
@@ -8609,7 +8612,7 @@ var com;
                                             var cell = cells[index158];
                                             {
                                                 n = cell.getAttribute("N");
-                                                var v = cell.getAttribute("V");
+                                                var v = cell.getAttribute("V") || cell.textContent || "";
                                                 switch ((n)) {
                                                     case "Value":
                                                         value = v;
@@ -10688,9 +10691,9 @@ var com;
                             var yS = "-0.4";
                             if (control != null) {
                                 xEl = control.getElementsByTagName(com.mxgraph.io.vsdx.mxVsdxConstants.X).item(0);
-                                xS = xEl.getAttribute("F");
+                                xS = xEl.getAttribute("F") || "";
                                 yEl = control.getElementsByTagName(com.mxgraph.io.vsdx.mxVsdxConstants.Y).item(0);
-                                yS = yEl.getAttribute("F");
+                                yS = yEl.getAttribute("F") || "";
                             }
                             var geometry_4 = vertex.getGeometry();
                             xS = xS.split("Width/2+").join("");
@@ -11080,7 +11083,7 @@ var com;
                                 var firstNURBS = firstGeom.getElementsByTagName(com.mxgraph.io.vsdx.mxVsdxConstants.NURBS_TO).item(0);
                                 var firstE = firstNURBS.getElementsByTagName("E").item(0);
                                 if (firstE != null) {
-                                    var f = firstE.getAttribute("F");
+                                    var f = firstE.getAttribute("F") || "";
                                     f = f.replace(new RegExp("NURBS\\(", 'g'), "");
                                     f = f.replace(new RegExp("\\)", 'g'), "");
                                     f = f.replace(new RegExp(",", 'g'), " ");
