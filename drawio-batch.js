@@ -57,11 +57,7 @@ program
   })
   .parse(process.argv)
 
-const puppeteer = require('puppeteer')
-
-function sleep (ms) {
-  return new Promise(resolve => setTimeout(resolve, ms))
-}
+const puppeteer = require('puppeteer');
 
 (async () => {
   const browser = await puppeteer.launch({args: ['--no-sandbox']})
