@@ -22,6 +22,17 @@ function parseScale (val) {
   return number
 }
 
+function parseBounds (val) {
+  var list = val.split('x').map(Number);
+  if (list.length != 2) {
+    throw new Error('Dimensions must exactly be two items')
+  }
+  if (list[0] <= 0 || list[1] <= 0) {
+    throw new Error('Dimensions must be positive')
+  }
+  return {width: list[0], height: list[1]}
+}
+
 var input = null
 var output = null
 
@@ -35,6 +46,8 @@ program
     'output image quality for JPEG and PNG (0..100)', parseQuality, 75)
   .option('-s --scale <scale>',
     'scales the output file size for pixel-based output formats', parseScale, 1.0)
+  .option('-b --bounds <WxH>',
+    'Fits the generated image into the specified bounds, preserves aspect ratio.', parseBounds, {width: 0, height: 0})
   .option('-d --diagramId <diagramId>',
     'selects a specific diagram', parseInt, 0)
   .arguments('<input> <output>')
@@ -59,14 +72,16 @@ function sleep (ms) {
 
     await page.goto('file://' + __dirname + '/drawio/src/main/webapp/export3.html')
 
-    await page.evaluate(function (xml, format, scale, diagramId) {
+    await page.evaluate(function (xml, format, bounds, scale, diagramId) {
       return render({
         xml: xml,
         format: format,
         scale: scale,
+        w: bounds.width,
+        h: bounds.height,
         from: diagramId,
       })
-    }, input, program.format, program.scale, program.diagramId)
+    }, input, program.format, program.bounds, program.scale, program.diagramId)
 
     await page.waitForSelector('#LoadingComplete');
     var bounds = await page.mainFrame().$eval('#LoadingComplete', div => div.getAttribute('bounds'));
