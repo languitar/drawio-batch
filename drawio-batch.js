@@ -57,15 +57,20 @@ function sleep (ms) {
     await input
     const page = await browser.newPage()
 
-    await page.goto('file://' + __dirname + '/drawio/src/main/webapp/export2.html')
-    var bounds = await page.evaluate(function (xml, format, scale, diagramId) {
-      return new Promise(function (resolve, reject) {
-        window.callPhantom = function (bounds) {
-          resolve(bounds)
-        }
-        render({xml: xml, format: format, scale: scale, from: diagramId})
+    await page.goto('file://' + __dirname + '/drawio/src/main/webapp/export3.html')
+
+    await page.evaluate(function (xml, format, scale, diagramId) {
+      return render({
+        xml: xml,
+        format: format,
+        scale: scale,
+        from: diagramId,
       })
     }, input, program.format, program.scale, program.diagramId)
+
+    await page.waitForSelector('#LoadingComplete');
+    var bounds = await page.mainFrame().$eval('#LoadingComplete', div => div.getAttribute('bounds'));
+    var bounds = JSON.parse(bounds);
 
     var width = Math.ceil(bounds.x + bounds.width)
     var height = Math.ceil(bounds.y + bounds.height)
