@@ -20,9 +20,12 @@
 	{
 		var link = document.createElement('span');
 		link.setAttribute('title', mxResources.get('help'));
-		link.style.cssText = 'color:blue;text-decoration:underline;margin-left:12px;cursor:help;';
+		link.style.cssText = 'color:blue;text-decoration:underline;margin-left:8px;cursor:help;';
 		
 		var icon = document.createElement('img');
+		mxUtils.setOpacity(icon, 50);
+		icon.style.height = '16px';
+		icon.style.width = '16px';
 		icon.setAttribute('border', '0');
 		icon.setAttribute('valign', 'bottom');
 		icon.setAttribute('src', Editor.helpImage);
@@ -194,6 +197,7 @@
 			}
 			else
 			{
+				var noPages = editorUi.pages == null || editorUi.pages.length <= 1;
 				var div = document.createElement('div');
 				div.style.whiteSpace = 'nowrap';
 				
@@ -202,34 +206,53 @@
 				hd.style.cssText = 'width:100%;text-align:center;margin-top:0px;margin-bottom:4px';
 				div.appendChild(hd);
 				
-				var selection = editorUi.addCheckbox(div, mxResources.get('selectionOnly'),
-					false, graph.isSelectionEmpty());
-				var crop = editorUi.addCheckbox(div, mxResources.get('crop'),
-					!graph.pageVisible || !editorUi.pdfPageExport,
-					!editorUi.pdfPageExport);
-				crop.style.marginBottom = '16px';
-				
-				// Crop is only enabled if selection only is selected
-				if (!editorUi.pdfPageExport)
+				var cropEnableFn = function()
 				{
-					mxEvent.addListener(selection, 'change', function()
+					if (allPages != this && this.checked)
 					{
-						if (selection.checked)
-						{
-							crop.removeAttribute('disabled');
-						}
-						else
-						{
-							crop.setAttribute('disabled', 'disabled');
-						}
-					});	
+						crop.removeAttribute('disabled');
+					}
+					else
+					{
+						crop.setAttribute('disabled', 'disabled');
+						crop.checked = false;
+					}
+				};
+				
+				var dlgH = 146;
+				
+				if (editorUi.pdfPageExport && !noPages)
+				{
+					var allPages = editorUi.addRadiobox(div, 'pages', mxResources.get('allPages'), true);
+					var currentPage = editorUi.addRadiobox(div, 'pages', mxResources.get('currentPage', null, 'Current Page'), false);
+					var selection = editorUi.addRadiobox(div, 'pages', mxResources.get('selectionOnly'), false, graph.isSelectionEmpty());
+					var crop = editorUi.addCheckbox(div, mxResources.get('crop'), false, true);
+					
+					mxEvent.addListener(allPages, 'change', cropEnableFn);
+					mxEvent.addListener(currentPage, 'change', cropEnableFn);
+					mxEvent.addListener(selection, 'change', cropEnableFn);
+					dlgH = 205;
+				}
+				else
+				{
+					var selection = editorUi.addCheckbox(div, mxResources.get('selectionOnly'),
+							false, graph.isSelectionEmpty());
+					var crop = editorUi.addCheckbox(div, mxResources.get('crop'),
+							!graph.pageVisible || !editorUi.pdfPageExport,
+							!editorUi.pdfPageExport);
+					
+					// Crop is only enabled if selection only is selected
+					if (!editorUi.pdfPageExport)
+					{
+						mxEvent.addListener(selection, 'change', cropEnableFn);	
+					}
 				}
 				
 				var dlg = new CustomDialog(editorUi, div, mxUtils.bind(this, function()
 				{
-					editorUi.downloadFile('pdf', null, null, !selection.checked, null, !crop.checked);
+					editorUi.downloadFile('pdf', null, null, !selection.checked, noPages? true : !allPages.checked, !crop.checked);
 				}), null, mxResources.get('export'));
-				editorUi.showDialog(dlg.container, 300, 146, true, true);
+				editorUi.showDialog(dlg.container, 300, dlgH, true, true);
 			}
 		}));
 		
@@ -280,105 +303,22 @@
 		{
 			var file = editorUi.getCurrentFile();
 			
-			if (file == null || (file.constructor != DriveFile && file.constructor != DropboxFile) ||
-				(editorUi.drive == null && file.constructor == DriveFile) ||
-				(editorUi.dropbox == null && file.constructor == DropboxFile))
+			if (file == null || !file.isRevisionHistorySupported())
 			{
 				editorUi.showError(mxResources.get('error'), mxResources.get('notAvailable'), mxResources.get('ok'));
 			}
 			else if (editorUi.spinner.spin(document.body, mxResources.get('loading')))
 			{
-				if (file.constructor == DropboxFile)
+				file.getRevisions(mxUtils.bind(this, function(revs)
 				{
-					// Limit is maximum number of entries to return
-					var promise = editorUi.dropbox.client.filesListRevisions({path: file.stat.path_lower, limit: 100});
-					promise.then(mxUtils.bind(this, function(response)
-					{
-						editorUi.spinner.stop();
-						
-						try
-						{
-							var revs = [];
-							
-							for (var i = response.entries.length - 1; i >= 0; i--)
-							{
-								(function(stat)
-								{
-									revs.push({modifiedDate: stat.client_modified, fileSize: stat.size, getXml: function(success, error)
-									{
-										editorUi.dropbox.readFile({path: file.stat.path_lower, rev: stat.rev}, success, error);
-									}, getUrl: function()
-									{
-										return editorUi.getUrl(window.location.pathname + '?rev=' + stat.rev + '&chrome=0&edit=_blank') + window.location.hash;
-									}});
-								})(response.entries[i]);
-							}
-							
-							var dlg = new RevisionDialog(editorUi, revs);
-							editorUi.showDialog(dlg.container, 640, 480, true, true);
-							dlg.init();
-						}
-						catch (e)
-						{
-							editorUi.handleError(e);
-						}
-					}));
-					// Workaround for IE8/9 support with catch function
-					promise['catch'](function(err)
-					{
-						editorUi.spinner.stop();
-						editorUi.handleError(err);
-					});
-				}
-				// Google Drive File
-				else
+					editorUi.spinner.stop();
+					var dlg = new RevisionDialog(editorUi, revs);
+					editorUi.showDialog(dlg.container, 640, 480, true, true);
+					dlg.init();
+				}), mxUtils.bind(this, function(err)
 				{
-					// TODO: Allow team drives
-					editorUi.drive.executeRequest(gapi.client.drive.revisions.list({'fileId': file.getId()}), function(resp)
-					{
-						editorUi.spinner.stop();
-						
-						for (var i = 0; i < resp.items.length; i++)
-						{
-							(function(item)
-							{
-								item.getXml = function(success, error)
-								{
-									// Workaround for vanished head revision is to use current head revision from descriptor
-									// TODO: Allow team drives
-									editorUi.drive.executeRequest(gapi.client.drive.revisions.get({'fileId': file.getId(),
-										'revisionId': (resp.items[resp.items.length - 1] === item) ?
-										file.desc.headRevisionId : item.id}), function(resp)
-									{
-										editorUi.drive.getXmlFile(resp, null, function(file2)
-							   			{
-											success(file2.getData());
-							   			}, function(resp)
-							   			{
-							   				error(resp);
-							   			});
-									}, function(resp)
-									{
-										error(resp);
-									});
-								};
-								
-								item.getUrl = function()
-								{
-									return editorUi.getUrl(window.location.pathname + '?rev=' + item.id + '&chrome=0&edit=_blank') + window.location.hash;
-								};
-							})(resp.items[i]);
-						}
-	
-						var dlg = new RevisionDialog(editorUi, resp.items);
-						editorUi.showDialog(dlg.container, 640, 480, true, true);
-						dlg.init();
-					}, function(resp)
-					{
-						editorUi.spinner.stop();
-						editorUi.handleError(resp);
-					});
-				}
+					editorUi.handleError(err);
+				}));
 			}
 		});
 		
@@ -386,6 +326,17 @@
 		{
 			editorUi.actions.get('save').funct();
 		}, null, null, Editor.ctrlKey + '+S');
+		
+		var action = editorUi.actions.addAction('synchronize', function()
+		{
+			editorUi.synchronizeCurrentFile(DrawioFile.SYNC == 'none');
+		}, null, null, 'Alt+Shift+S');
+		
+		// Changes the label if synchronization is disabled
+		if (DrawioFile.SYNC == 'none')
+		{
+			action.label = mxResources.get('refresh');
+		}
 
 		editorUi.actions.addAction('upload...', function()
 		{
@@ -468,7 +419,8 @@
 			 				'align', 'verticalAlign', 'strokeColor', 'strokeWidth', 'fillColor', 'gradientColor', 'swimlaneFillColor',
 		                    'textOpacity', 'gradientDirection', 'glass', 'labelBackgroundColor', 'labelBorderColor', 'opacity',
 		                    'spacing', 'spacingTop', 'spacingLeft', 'spacingBottom', 'spacingRight', 'endFill', 'endArrow',
-		                    'endSize', 'startStill', 'startArrow', 'startSize', 'arcSize'];
+		                    'endSize', 'targetPerimeterSpacing', 'startFill', 'startArrow', 'startSize', 'sourcePerimeterSpacing',
+		                    'arcSize'];
 		
 		editorUi.actions.addAction('copyStyle', function()
 		{
@@ -790,16 +742,36 @@
 							elt.style.width = '16px';
 							elt.style.paddingTop = '2px';
 							elt.style.paddingLeft = '4px';
-							elt.innerHTML = '<div class="geIcon geSprite geSprite-globe"/>';
 							elt.style.zIndex = '1';
 							elt.style.position = 'absolute';
 							elt.style.top = '2px';
 							elt.style.right = '17px';
 							elt.style.display = 'block';
+							elt.style.cursor = 'pointer';
 							
 							if (!mxClient.IS_VML)
 							{
-								mxUtils.setOpacity(elt, 60);
+								var icon = document.createElement('div');
+								icon.style.backgroundImage = 'url(' + Editor.globeImage + ')';
+								icon.style.backgroundPosition = 'center center';
+								icon.style.backgroundRepeat = 'no-repeat';
+								icon.style.backgroundSize = '19px 19px';
+								icon.style.position = 'absolute';
+								icon.style.height = '19px';
+								icon.style.width = '19px';
+								icon.style.marginTop = '2px';
+								icon.style.zIndex = '1';
+								elt.appendChild(icon);
+								mxUtils.setOpacity(elt, 40);
+								
+								if (uiTheme == 'dark')
+								{
+									elt.style.filter = 'invert(100%)';
+								}
+							}
+							else
+							{
+								elt.innerHTML = '<div class="geIcon geSprite geSprite-globe"/>';
 							}
 							
 							document.body.appendChild(elt);
@@ -838,7 +810,7 @@
 						this.editorUi.openLink('https://desk.draw.io/support/search/solutions?term=' +
 							encodeURIComponent(term));
 						input.value = '';
-						this.editorUi.logEvent({category: 'Help', action: 'search', label: term});
+						EditorUi.logEvent({category: 'Help', action: 'search', label: term});
 						
 						if (this.editorUi.menubar != null)
 						{
@@ -945,28 +917,48 @@
 					var b = graph.getGraphBounds();
 					var tr = graph.view.translate;
 					var s = graph.view.scale;
-					graph.insertVertex(parent, null, '', b.x / s - tr.x, b.y / s - tr.y, b.width / s, b.height / s, 'fillColor=none;strokeColor=red;');
+					graph.insertVertex(graph.getDefaultParent(), null, '',
+						b.x / s - tr.x, b.y / s - tr.y, b.width / s, b.height / s,
+						'fillColor=none;strokeColor=red;');
 				}));
 
-				mxResources.parse('createSidebarEntry=Create sidebar entry');
+				mxResources.parse('createSidebarEntry=Create Sidebar Entry');
 				
 				this.editorUi.actions.addAction('createSidebarEntry', mxUtils.bind(this, function()
 				{
 					if (!graph.isSelectionEmpty())
 					{
-						mxLog.show();
-						mxLog.debug('sb.createVertexTemplateFromData(\'' +
-								graph.compress(mxUtils.getXml(graph.encodeCells(graph.getSelectionCells()))) +
-								'\', width, height, \'Title\');');
+						editorUi.showTextDialog('Create Sidebar Entry', 'sb.createVertexTemplateFromData(\'' +
+							graph.compress(mxUtils.getXml(graph.encodeCells(graph.getSelectionCells()))) +
+							'\', width, height, \'Title\');');
 					}
 				}));
 
 				this.addMenuItems(menu, ['-', 'createSidebarEntry', 'showBoundingBox'], parent);
 
 				// For testing local XML export
+				mxResources.parse('testChecksum=Checksum');
+				
+				editorUi.actions.addAction('testChecksum', mxUtils.bind(this, function()
+				{
+					if (editorUi.pages != null)
+					{
+						mxLog.show();
+						mxLog.debug(editorUi.pages.length + ' page(s) checksum=' +
+							editorUi.getHashValueForPages(editorUi.pages));
+					}
+					else
+					{
+						editorUi.alert('No pages');
+					}
+				}));
+					
+				this.addMenuItems(menu, ['-', 'testChecksum'], parent);
+				
+				// For testing local XML export
 				mxResources.parse('testXmlImageExport=XML Image Export');
 				
-				this.editorUi.actions.addAction('testXmlImageExport', mxUtils.bind(this, function()
+				editorUi.actions.addAction('testXmlImageExport', mxUtils.bind(this, function()
 				{
 					var bg = '#ffffff';
 					var scale = 1;
@@ -1023,62 +1015,90 @@
 					
 				this.addMenuItems(menu, ['testXmlImageExport'], parent);
 
-				mxResources.parse('testShowRtModel=Show RT model');
-				mxResources.parse('testDebugRtModel=Debug RT model');
-				mxResources.parse('testDownloadRtModel=Download RT model');
+				mxResources.parse('testDownloadRtModel=Export RT model');
+				mxResources.parse('testImportRtModel=Import RT model');
 				
-				this.editorUi.actions.addAction('testShowRtModel', mxUtils.bind(this, function()
+				this.editorUi.actions.addAction('testDownloadRtModel...', mxUtils.bind(this, function()
 				{
-					if (this.editorUi.getCurrentFile() != null && this.editorUi.getCurrentFile().realtime != null)
+					if (editorUi.drive == null)
 					{
-						console.log('bytesUsed', this.editorUi.getCurrentFile().realtime.rtModel.bytesUsed);
-						console.log('root', this.editorUi.getCurrentFile().realtime.dumpRoot());
-						this.editorUi.getCurrentFile().realtime.check();
+						editorUi.handleError({message: mxResources.get('serviceUnavailableOrBlocked')});
 					}
-				}));
-				
-				this.editorUi.actions.addAction('testDebugRtModel', mxUtils.bind(this, function()
-				{
-					gapi.drive.realtime.debug();
-				}));
-				
-				this.editorUi.actions.addAction('testDownloadRtModel', mxUtils.bind(this, function()
-				{
-					var file = this.editorUi.getCurrentFile();
-					
-					if (file != null && file.realtime != null &&
-						editorUi.spinner.spin(document.body, mxResources.get('export')))
+					else
 					{
-						// LATER: Download full model dump with history
-						var req = new mxXmlRequest('https://www.googleapis.com/drive/v2/files/' +
-								file.getHash().substring(1) + '/realtime', null, 'GET');
-
-						// Adds auth token
-						req.setRequestHeaders = function(request)
+						editorUi.drive.execute(mxUtils.bind(this, function()
 						{
-							mxXmlRequest.prototype.setRequestHeaders.apply(this, arguments);
-							var token = gapi.auth.getToken().access_token;
-							request.setRequestHeader('authorization', 'Bearer ' + token);	
-						};
-						
-						req.send(function(req)
-						{
-							editorUi.spinner.stop();
+							var fileId =prompt('File ID', '');
 							
-							if (req.getStatus() >= 200 && req.getStatus() <= 299)
+							if (fileId != null && fileId.length > 0 &&
+								editorUi.spinner.spin(document.body, mxResources.get('export')))
 							{
-								editorUi.saveLocalFile(req.getText(), 'realtime.txt', 'text/plain');
+								// LATER: Download full model dump with history
+								var req = new mxXmlRequest('https://www.googleapis.com/drive/v2/files/' +
+										fileId + '/realtime?supportsTeamDrives=true', null, 'GET');
+		
+								// Adds auth token
+								req.setRequestHeaders = function(request)
+								{
+									mxXmlRequest.prototype.setRequestHeaders.apply(this, arguments);
+									var token = gapi.auth.getToken().access_token;
+									request.setRequestHeader('authorization', 'Bearer ' + token);	
+								};
+								
+								req.send(function(req)
+								{
+									editorUi.spinner.stop();
+									
+									if (req.getStatus() >= 200 && req.getStatus() <= 299)
+									{
+										editorUi.saveLocalFile(req.getText(), 'json-' + fileId +'.txt', 'text/plain');
+									}
+									else
+									{
+										editorUi.handleError({message: mxResources.get('fileNotFound')},
+											mxResources.get('errorLoadingFile'));
+									}
+								});
 							}
-						});
+						}));
 					}
 				}));
 
-				if (this.editorUi.getCurrentFile() != null && this.editorUi.getCurrentFile().realtime != null)
+				this.addMenuItems(menu, ['-', 'testDownloadRtModel'], parent);
+				
+				menu.addItem(mxResources.get('testImportRtModel') + '...', null, function()
 				{
-					this.addMenuItems(menu, ['-', 'testShowRtModel', 'testDebugRtModel', 'testDownloadRtModel'], parent);
-				}
+					var input = document.createElement('input');
+					input.setAttribute('type', 'file');
+					
+					mxEvent.addListener(input, 'change', mxUtils.bind(this, function()
+					{
+						if (input.files != null)
+						{
+							var reader = new FileReader();
+							
+							reader.onload = mxUtils.bind(this, function(e)
+							{
+								try
+								{
+									editorUi.openLocalFile(mxUtils.getXml(editorUi.drive.convertJsonToXml(
+										JSON.parse(e.target.result).data)), input.files[0].name, true);
+								}
+								catch (err)
+								{
+									editorUi.handleError(err, mxResources.get('errorLoadingFile'));
+								}
+							});
+							
+							reader.readAsText(input.files[0]);
+						}
+					}));
+			
+					input.click();
+				});
 				
 				mxResources.parse('testShowConsole=Show Console');
+				
 				this.editorUi.actions.addAction('testShowConsole', function()
 				{
 					if (!mxLog.isVisible())
@@ -1092,6 +1112,7 @@
 					
 					mxLog.window.div.style.zIndex = mxPopupMenu.prototype.zIndex - 1;
 				});
+				
 				this.addMenuItems(menu, ['-', 'testShowConsole']);
 			}
 		})));
@@ -1316,6 +1337,11 @@
 			editorUi.openLink('http://docsaddon.draw.io');
 		});
 
+		editorUi.actions.addAction('googleSlides...', function()
+		{
+			editorUi.openLink('https://slidesaddon.draw.io');
+		});
+
 		editorUi.actions.addAction('googleSites...', function()
 		{
 			if (editorUi.spinner.spin(document.body, mxResources.get('loading')))
@@ -1478,8 +1504,6 @@
 			}
 		})));
 
-		this.editorUi.actions.addAction('chatWindowTitle...', mxUtils.bind(this.editorUi, this.editorUi.toggleChat));
-		
 		this.put('importFrom', new Menu(function(menu, parent)
 		{
 			var doImportFile = mxUtils.bind(this, function(data, mime, filename)
@@ -1608,13 +1632,20 @@
 					}, parent, null, false);
 				}
 			}
-			
-			if (editorUi.gitHub != null)
+
+			if (editorUi.oneDrive != null)
 			{
-				menu.addItem(mxResources.get('github') + '...', null, function()
+				menu.addItem(mxResources.get('oneDrive') + '...', null, function()
 				{
-					pickFileFromService(editorUi.gitHub);
+					pickFileFromService(editorUi.oneDrive);
 				}, parent);
+			}
+			else if (oneDriveEnabled)
+			{
+				menu.addItem(mxResources.get('oneDrive') + ' (' + mxResources.get('loading') + '...)', null, function()
+				{
+					// do nothing
+				}, parent, null, false);
 			}
 
 			if (editorUi.dropbox != null)
@@ -1632,21 +1663,14 @@
 				}, parent, null, false);
 			}
 			
-			if (editorUi.oneDrive != null)
+			if (editorUi.gitHub != null)
 			{
-				menu.addItem(mxResources.get('oneDrive') + '...', null, function()
+				menu.addItem(mxResources.get('github') + '...', null, function()
 				{
-					pickFileFromService(editorUi.oneDrive);
+					pickFileFromService(editorUi.gitHub);
 				}, parent);
 			}
-			else if (oneDriveEnabled)
-			{
-				menu.addItem(mxResources.get('oneDrive') + ' (' + mxResources.get('loading') + '...)', null, function()
-				{
-					// do nothing
-				}, parent, null, false);
-			}
-			
+
 			if (editorUi.trello != null)
 			{
 				menu.addItem(mxResources.get('trello') + '...', null, function()
@@ -1672,13 +1696,10 @@
 				}, parent);
 			}
 
-			if (!mxClient.IS_IOS)
+			menu.addItem(mxResources.get('device') + '...', null, function()
 			{
-				menu.addItem(mxResources.get('device') + '...', null, function()
-				{
-					editorUi.importLocalFile(true);
-				}, parent);
-			}
+				editorUi.importLocalFile(true);
+			}, parent);
 
 			if (!editorUi.isOffline())
 			{
@@ -1830,20 +1851,8 @@
 			
 			if (file != null)
 			{
-				var title = (file.getTitle() != null) ? file.getTitle() : editorUi.defaultFilename;
-				
-				// Handles extension
-				var extension = '';
-				var dot = title.lastIndexOf('.');
-				
-				if (dot >= 0)
-				{
-					extension = title.substring(dot);
-					title = title.substring(0, dot);
-				}
-				
-				title = mxResources.get('copyOf', [title]) + extension;
-				
+				var title = editorUi.getCopyFilename(file);
+
 				if (file.constructor == DriveFile)
 				{
 					var dlg = new CreateDialog(editorUi, title, mxUtils.bind(this, function(newTitle, mode)
@@ -1860,18 +1869,18 @@
 							{
 								if (editorUi.spinner.spin(document.body, mxResources.get('saving')))
 								{
-									// Makes sure the latest XML is in the file
-									file.save(false, mxUtils.bind(this, function()
+									// Saveas does not update the file descriptor in Google Drive
+									file.saveAs(newTitle, mxUtils.bind(this, function(resp)
 									{
-										// Saveas does not update the file descriptor in Google Drive
-										file.saveAs(newTitle, mxUtils.bind(this, function(resp)
+										// Replaces file descriptor in-place and saves
+										file.desc = resp;
+										
+										// Makes sure the latest XML is in the file
+										file.save(false, mxUtils.bind(this, function()
 										{
 											editorUi.spinner.stop();
-											var url = editorUi.getUrl();
-											window.openWindow(url + '#G' + resp.id, null, mxUtils.bind(this, function()
-											{
-												window.location.hash = 'G' + resp.id;
-											}));
+											file.setModified(false);
+											file.addAllSavedStatus();
 										}), mxUtils.bind(this, function(resp)
 										{
 											editorUi.handleError(resp);
@@ -1884,7 +1893,7 @@
 							}
 							else
 							{
-								this.editorUi.createFile(newTitle, this.editorUi.getFileData(true), null, mode);
+								editorUi.createFile(newTitle, editorUi.getFileData(true), null, mode);
 							}
 						}
 					}), mxUtils.bind(this, function()
@@ -1966,7 +1975,7 @@
 
 			if (!editorUi.isOffline())
 			{
-				this.addMenuItems(menu, ['-', 'googleSites', 'googleDocs'], parent);
+				this.addMenuItems(menu, ['-', 'googleDocs', 'googleSlides', 'googleSites'], parent);
 			}
 		})));
 
@@ -2144,29 +2153,6 @@
 					// do nothing
 				}, parent, null, false);
 			}
-
-			if (editorUi.gitHub != null)
-			{
-				menu.addItem(mxResources.get('github') + '...', null, function()
-				{
-					editorUi.pickFile(App.MODE_GITHUB);
-				}, parent);
-			}
-			
-			if (editorUi.dropbox != null)
-			{
-				menu.addItem(mxResources.get('dropbox') + '...', null, function()
-				{
-					editorUi.pickFile(App.MODE_DROPBOX);
-				}, parent);
-			}
-			else if (dropboxEnabled)
-			{
-				menu.addItem(mxResources.get('dropbox') + ' (' + mxResources.get('loading') + '...)', null, function()
-				{
-					// do nothing
-				}, parent, null, false);
-			}
 			
 			if (editorUi.oneDrive != null)
 			{
@@ -2183,6 +2169,29 @@
 				}, parent, null, false);
 			}
 			
+			if (editorUi.dropbox != null)
+			{
+				menu.addItem(mxResources.get('dropbox') + '...', null, function()
+				{
+					editorUi.pickFile(App.MODE_DROPBOX);
+				}, parent);
+			}
+			else if (dropboxEnabled)
+			{
+				menu.addItem(mxResources.get('dropbox') + ' (' + mxResources.get('loading') + '...)', null, function()
+				{
+					// do nothing
+				}, parent, null, false);
+			}
+
+			if (editorUi.gitHub != null)
+			{
+				menu.addItem(mxResources.get('github') + '...', null, function()
+				{
+					editorUi.pickFile(App.MODE_GITHUB);
+				}, parent);
+			}
+
 			if (editorUi.trello != null)
 			{
 				menu.addItem(mxResources.get('trello') + '...', null, function()
@@ -2265,15 +2274,22 @@
 						}, parent, null, false);
 					}
 				}
-				
-				if (editorUi.gitHub != null)
+
+				if (editorUi.oneDrive != null)
 				{
-					menu.addItem(mxResources.get('github') + '...', null, function()
+					menu.addItem(mxResources.get('oneDrive') + '...', null, function()
 					{
-						editorUi.showLibraryDialog(null, null, null, null, App.MODE_GITHUB);
+						editorUi.showLibraryDialog(null, null, null, null, App.MODE_ONEDRIVE);
 					}, parent);
 				}
-				
+				else if (oneDriveEnabled)
+				{
+					menu.addItem(mxResources.get('oneDrive') + ' (' + mxResources.get('loading') + '...)', null, function()
+					{
+						// do nothing
+					}, parent, null, false);
+				}
+
 				if (editorUi.dropbox != null)
 				{
 					menu.addItem(mxResources.get('dropbox') + '...', null, function()
@@ -2289,19 +2305,12 @@
 					}, parent, null, false);
 				}
 				
-				if (editorUi.oneDrive != null)
+				if (editorUi.gitHub != null)
 				{
-					menu.addItem(mxResources.get('oneDrive') + '...', null, function()
+					menu.addItem(mxResources.get('github') + '...', null, function()
 					{
-						editorUi.showLibraryDialog(null, null, null, null, App.MODE_ONEDRIVE);
+						editorUi.showLibraryDialog(null, null, null, null, App.MODE_GITHUB);
 					}, parent);
-				}
-				else if (oneDriveEnabled)
-				{
-					menu.addItem(mxResources.get('oneDrive') + ' (' + mxResources.get('loading') + '...)', null, function()
-					{
-						// do nothing
-					}, parent, null, false);
 				}
 				
 				if (editorUi.trello != null)
@@ -2357,15 +2366,22 @@
 						}, parent, null, false);
 					}
 				}
-				
-				if (editorUi.gitHub != null)
+
+				if (editorUi.oneDrive != null)
 				{
-					menu.addItem(mxResources.get('github') + '...', null, function()
+					menu.addItem(mxResources.get('oneDrive') + '...', null, function()
 					{
-						editorUi.pickLibrary(App.MODE_GITHUB);
+						editorUi.pickLibrary(App.MODE_ONEDRIVE);
 					}, parent);
 				}
-				
+				else if (oneDriveEnabled)
+				{
+					menu.addItem(mxResources.get('oneDrive') + ' (' + mxResources.get('loading') + '...)', null, function()
+					{
+						// do nothing
+					}, parent, null, false);
+				}
+
 				if (editorUi.dropbox != null)
 				{
 					menu.addItem(mxResources.get('dropbox') + '...', null, function()
@@ -2381,19 +2397,12 @@
 					}, parent, null, false);
 				}
 				
-				if (editorUi.oneDrive != null)
+				if (editorUi.gitHub != null)
 				{
-					menu.addItem(mxResources.get('oneDrive') + '...', null, function()
+					menu.addItem(mxResources.get('github') + '...', null, function()
 					{
-						editorUi.pickLibrary(App.MODE_ONEDRIVE);
+						editorUi.pickLibrary(App.MODE_GITHUB);
 					}, parent);
-				}
-				else if (oneDriveEnabled)
-				{
-					menu.addItem(mxResources.get('oneDrive') + ' (' + mxResources.get('loading') + '...)', null, function()
-					{
-						// do nothing
-					}, parent, null, false);
 				}
 				
 				if (editorUi.trello != null)
@@ -2559,6 +2568,9 @@
 			menu.addSeparator(parent);
 			this.addMenuItem(menu, 'tags', parent);
 			
+			// Adds trailing separator in case new plugin entries are added
+			menu.addSeparator(parent);
+			
 			if (urlParams['newTempDlg'] == '1')
 			{
 				editorUi.actions.addAction('templates', function()
@@ -2646,19 +2658,16 @@
 						this.addMenuItems(menu, ['exportOptionsDisabled'], parent);
 					}
 					
-					if (file.realtime == null)
+					this.addMenuItems(menu, ['save', '-', 'share'], parent);
+					
+					var item = this.addMenuItem(menu, 'synchronize', parent);
+					
+					if (!editorUi.isOffline() || mxClient.IS_CHROMEAPP)
 					{
-						this.addMenuItems(menu, ['save', 'share', '-'], parent);
+						this.addLinkToItem(item, 'https://desk.draw.io/support/solutions/articles/16000087947');
 					}
-					else
-					{
-						if (!file.isAutosave())
-						{
-							this.addMenuItems(menu, ['save'], parent);
-						}
-						
-						this.addMenuItems(menu, ['share', 'chatWindowTitle', '-'], parent);
-					}
+					
+					menu.addSeparator(parent);
 				}
 				else
 				{
@@ -2678,7 +2687,21 @@
 				}
 				else
 				{
-					this.addMenuItems(menu, ['-', 'save', 'saveAs', '-', 'rename'], parent);
+					if (!mxClient.IS_CHROMEAPP && !EditorUi.isElectronApp &&
+						file != null && file.constructor != LocalFile)
+					{	
+						menu.addSeparator(parent);
+						var item = this.addMenuItem(menu, 'synchronize', parent);
+						
+						if (!editorUi.isOffline() || mxClient.IS_CHROMEAPP)
+						{
+							this.addLinkToItem(item, 'https://desk.draw.io/support/solutions/articles/16000087947');
+						}
+					}
+					
+					this.addMenuItems(menu, ['-', 'save', 'saveAs'], parent);
+					
+					this.addMenuItems(menu, ['-', 'rename'], parent);
 
 					if (editorUi.isOfflineApp())
 					{
@@ -2708,16 +2731,11 @@
 				this.addSubmenu('newLibrary', menu, parent);
 				this.addSubmenu('openLibraryFrom', menu, parent);
 				
-				if (file != null && (file.constructor == DriveFile || file.constructor == DropboxFile))
+				if (file != null && file.isRevisionHistorySupported())
 				{
 					this.addMenuItems(menu, ['-', 'revisionHistory'], parent);
 				}
 				
-				if (file != null && file.constructor == DriveFile)
-				{
-					this.addMenuItems(menu, ['createRevision'], parent);
-				}
-
 				this.addMenuItems(menu, ['-', 'pageSetup'], parent);
 				
 				// Cannot use print in standalone mode on iOS as we cannot open new windows
@@ -2729,28 +2747,5 @@
 				this.addMenuItems(menu, ['-', 'close']);
 			}
 		})));
-	};
-
-	/**
-	 * Replaces help menu label with icon on small screen
-	 */
-	var menuCreated = Menus.prototype.menuCreated;
-	
-	Menus.prototype.menuCreated = function(menu, elt)
-	{
-		if (screen.width <= 480 && menu == this.get('help'))
-		{
-			elt.style.paddingRight = '0px';
-			elt.style.paddingLeft = '0px';
-			elt.innerHTML = '';
-			
-			var icon = document.createElement('img');
-			icon.setAttribute('border', '0');
-			icon.setAttribute('valign', 'bottom');
-			icon.setAttribute('src', Editor.helpImage);
-			elt.appendChild(icon);
-		}
-		
-		menuCreated.apply(this, arguments);
 	};
 })();
