@@ -28,3 +28,9 @@ rm test.pdf
 node drawio-batch.js -d 1 ./test/multipleSheets.xml test.pdf
 pdftotext test.pdf - | grep BoxOnSheetTwo
 rm test.pdf
+
+# check external images work
+node drawio-batch.js -d 1 ./test/images.xml test.pdf
+# if that doesn't work, the PDF is much smaller because no images are embedded
+test "$(stat --printf='%s' test.pdf)" -ge 4000
+rm test.pdf
