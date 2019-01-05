@@ -3,6 +3,8 @@
 'use strict'
 
 var fs = require('fs')
+var xpath = require('xpath')
+var xmldom = require('xmldom')
 
 const program = require('commander')
 
@@ -41,7 +43,7 @@ program
   .version(require('./package.json').version)
   .option('-f --format <format>',
     'ignored, for backwards compatibility. File type is determined from output extension',
-    /^(pdf|gif|png|jpeg|bmp|ppm)$/, 'pdf')
+    /^(pdf|svg|gif|png|jpeg|bmp|ppm)$/, 'pdf')
   .option('-q --quality <quality>',
     'output image quality for JPEG and PNG (0..100)', parseQuality, 75)
   .option('-s --scale <scale>',
@@ -88,8 +90,33 @@ const puppeteer = require('puppeteer');
 
     await page.setViewport({width: width, height: height})
 
-    if (output.split('.').pop().toLowerCase() === 'pdf') {
+    var extension = output.split('.').pop().toLowerCase()
+    if (extension === 'pdf') {
       await page.pdf({path: output, width: width, height: height + 1, pageRanges: '1'})
+    } else if (extension === 'svg') {
+      // extracts the inline SVG element used for rendering the diagram and puts it into a file with appropriate SVG headers
+
+      // get the rendered page content and parse it as XML again
+      var domText = await page.evaluate(() => document.body.innerHTML)
+      var doc = new xmldom.DOMParser().parseFromString('<root>' + domText + '</root>')
+
+      // extract the SVG content and serialize it again
+      var svgNode = xpath.select('//svg', doc)[0]
+      var serializer = new xmldom.XMLSerializer()
+      var source = serializer.serializeToString(svgNode)
+      if (!source.match(/^<svg[^>]+xmlns="http\:\/\/www\.w3\.org\/2000\/svg"/)) {
+        source = source.replace(/^<svg/, '<svg xmlns="http://www.w3.org/2000/svg"')
+      }
+      if (!source.match(/^<svg[^>]+"http\:\/\/www\.w3\.org\/1999\/xlink"/)) {
+        source = source.replace(/^<svg/, '<svg xmlns:xlink="http://www.w3.org/1999/xlink"')
+      }
+      source = '<?xml version="1.0" standalone="no"?>\r\n' + source;
+      fs.writeFile(output, source, function(err) {
+        if (err) {
+          return console.log(err)
+        }
+      });
+
     } else {
       await page.screenshot({path: output, clip: bounds, quality: process.quality})
     }

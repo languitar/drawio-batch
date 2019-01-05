@@ -5,6 +5,7 @@ set -x
 
 rm test.pdf || true
 rm test.png || true
+rm test.svg || true
 
 # check general conversion
 node drawio-batch.js ./drawio/src/main/webapp/templates/uml/uml_1.xml test.pdf
@@ -34,3 +35,8 @@ node drawio-batch.js -d 1 ./test/images.xml test.pdf
 # if that doesn't work, the PDF is much smaller because no images are embedded
 test "$(stat --printf='%s' test.pdf)" -ge 4000
 rm test.pdf
+
+# check SVG export
+node drawio-batch.js ./drawio/src/main/webapp/templates/uml/uml_1.xml test.svg
+file test.svg | grep 'Scalable Vector Graphics'
+rm test.svg
