@@ -1,6 +1,6 @@
 {
   "name": "drawio-batch",
-  "version": "10.0.12",
+  "version": "10.0.22",
   "description": "A command line converter for drawio diagrams",
   "bin": "drawio-batch.js",
   "dependencies": {
