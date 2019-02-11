@@ -70,6 +70,8 @@ const puppeteer = require('puppeteer');
 
     await page.goto('file://' + __dirname + '/drawio/src/main/webapp/export3.html')
 
+    var format = output.split('.').pop().toLowerCase()
+
     await page.evaluate(function (xml, format, bounds, scale, diagramId) {
       return render({
         xml: xml,
@@ -79,7 +81,7 @@ const puppeteer = require('puppeteer');
         h: bounds.height,
         from: diagramId,
       })
-    }, input, program.format, program.bounds, program.scale, program.diagramId)
+    }, input, format, program.bounds, program.scale, program.diagramId)
 
     await page.waitForSelector('#LoadingComplete');
     var bounds = await page.mainFrame().$eval('#LoadingComplete', div => div.getAttribute('bounds'));
@@ -90,26 +92,44 @@ const puppeteer = require('puppeteer');
 
     await page.setViewport({width: width, height: height})
 
-    var extension = output.split('.').pop().toLowerCase()
-    if (extension === 'pdf') {
+    if (format === 'pdf') {
       await page.pdf({path: output, width: width, height: height + 1, pageRanges: '1'})
-    } else if (extension === 'svg') {
+    } else if (format === 'svg') {
       // extracts the inline SVG element used for rendering the diagram and puts it into a file with appropriate SVG headers
 
-      // get the rendered page content and parse it as XML again
-      var domText = await page.evaluate(() => document.body.innerHTML)
-      var doc = new xmldom.DOMParser().parseFromString('<root>' + domText + '</root>')
+      // get the rendered page content as valid SVG
+      var source = await page.mainFrame().evaluate(function() {
+        const xmlns = "http://www.w3.org/2000/xmlns/"
+        const xlinkns = "http://www.w3.org/1999/xlink"
+        const svgns = "http://www.w3.org/2000/svg"
 
-      // extract the SVG content and serialize it again
-      var svgNode = xpath.select('//svg', doc)[0]
-      var serializer = new xmldom.XMLSerializer()
-      var source = serializer.serializeToString(svgNode)
-      if (!source.match(/^<svg[^>]+xmlns="http\:\/\/www\.w3\.org\/2000\/svg"/)) {
-        source = source.replace(/^<svg/, '<svg xmlns="http://www.w3.org/2000/svg"')
-      }
-      if (!source.match(/^<svg[^>]+"http\:\/\/www\.w3\.org\/1999\/xlink"/)) {
-        source = source.replace(/^<svg/, '<svg xmlns:xlink="http://www.w3.org/1999/xlink"')
-      }
+        svg = document.getElementsByTagName('svg')[0]
+        svg.setAttribute("version", "1.1")
+
+        var defsEl = document.createElement("defs")
+        svg.insertBefore(defsEl, svg.firstChild)
+
+        var styleEl = document.createElement("style")
+        defsEl.appendChild(styleEl)
+        styleEl.setAttribute("type", "text/css")
+
+        // removing attributes so they aren't doubled up
+        svg.removeAttribute("xmlns")
+        svg.removeAttribute("xlink")
+
+        // These are needed for the svg
+        if (!svg.hasAttributeNS(xmlns, "xmlns")) {
+          svg.setAttributeNS(xmlns, "xmlns", svgns)
+        }
+
+        if (!svg.hasAttributeNS(xmlns, "xmlns:xlink")) {
+          svg.setAttributeNS(xmlns, "xmlns:xlink", xlinkns)
+        }
+
+        var source = (new XMLSerializer()).serializeToString(svg)
+        return source
+      })
+
       source = '<?xml version="1.0" standalone="no"?>\r\n' + source;
       fs.writeFile(output, source, function(err) {
         if (err) {
