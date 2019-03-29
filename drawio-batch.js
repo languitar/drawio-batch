@@ -50,6 +50,8 @@ program
     'scales the output file size for pixel-based output formats', parseScale, 1.0)
   .option('-b --bounds <WxH>',
     'Fits the generated image into the specified bounds, preserves aspect ratio.', parseBounds, {width: 0, height: 0})
+  .option('-c --crop',
+    'Crops the generated image (only if pdf)')
   .option('-d --diagramId <diagramId>',
     'selects a specific diagram', parseInt, 0)
   .arguments('<input> <output>')
@@ -70,16 +72,22 @@ const puppeteer = require('puppeteer');
 
     await page.goto('file://' + __dirname + '/drawio/src/main/webapp/export3.html')
 
-    await page.evaluate(function (xml, format, bounds, scale, diagramId) {
+    await page.evaluate(function (xml, format, bounds, scale, crop, diagramId) {
+      let width = bounds.width;
+      let height = bounds.height;
+      if (crop && format === 'pdf') {
+        width=0
+        height=-1
+      }
       return render({
         xml: xml,
         format: format,
         scale: scale,
-        w: bounds.width,
-        h: bounds.height,
+        w: width,
+        h: height,
         from: diagramId,
       })
-    }, input, program.format, program.bounds, program.scale, program.diagramId)
+    }, input, program.format, program.bounds, program.scale, program.crop, program.diagramId)
 
     await page.waitForSelector('#LoadingComplete');
     var bounds = await page.mainFrame().$eval('#LoadingComplete', div => div.getAttribute('bounds'));
