@@ -347,7 +347,7 @@ public class GliffyDiagramConverter
 				temp = mxUtils.getRotatedPoint(temp, Math.cos(rad), Math.sin(rad), new mxPoint(0.5, 0.5));
 			}
 
-			if (!orthogonal || (temp.getX() == 0.5 && temp.getY() == 0.5))
+			if (!orthogonal || (temp.getX() == 0.5 && temp.getY() == 0.5) || GliffyObject.FORCE_CONSTRAINTS_SHAPES.contains(object.uid))
 			{
 				mxCell cell = object.getMxObject();
 				cell.setStyle(cell.getStyle() + ((source) ? "exitX=" : "entryX=") + temp.getX() + ";" + ((source) ? "exitY=" : "entryY=")
@@ -692,6 +692,13 @@ public class GliffyDiagramConverter
 					//Gliffy's subroutine maps to drawio process, whose inner boundary, unlike subroutine's, is relative to it's width so here we set it to 10px
 					style.append("size=" + 10 / gliffyObject.width).append(";");
 				}
+				
+				String fragmentText;
+				if((fragmentText = gliffyObject.getUmlSequenceCombinedFragmentText()) != null) 
+				{
+					cell.setValue(fragmentText);
+					gliffyObject.children.remove(0);
+				}
 			}
 			else if (gliffyObject.isLine())
 			{
@@ -817,7 +824,7 @@ public class GliffyDiagramConverter
 			}
 		}
 		// swimlanes have children without uid so their children are converted here ad hoc
-		else if (gliffyObject.isSwimlane())
+		else if (gliffyObject.isSwimlane() && gliffyObject.children != null && gliffyObject.children.size() > 0)
 		{
 			cell.setVertex(true);
 			style.append(StencilTranslator.translate(gliffyObject.uid, null)).append(";");

@@ -43,7 +43,8 @@ OneDriveFile.prototype.getParentId = function()
 OneDriveFile.prototype.getIdOf = function(itemObj, parent)
 {
 	//TODO driveId is most probably always there. No need to check if it exists. Also, after some time, the code that check the old id format won't be needed 
-	return (itemObj.parentReference.driveId? itemObj.parentReference.driveId + '/' : '') + (parent? itemObj.parentReference.id : itemObj.id);
+	return ((itemObj.parentReference != null && itemObj.parentReference.driveId != null) ? itemObj.parentReference.driveId + '/' : '') +
+		((parent != null) ? itemObj.parentReference.id : itemObj.id);
 };
 
 /**
@@ -262,9 +263,10 @@ OneDriveFile.prototype.getLastModifiedDate = function()
  */
 OneDriveFile.prototype.save = function(revision, success, error, unloading, overwrite)
 {
-	DrawioFile.prototype.save.apply(this, arguments);
-	
-	this.saveFile(this.getTitle(), false, success, error, unloading, overwrite);
+	DrawioFile.prototype.save.apply(this, [revision, mxUtils.bind(this, function()
+	{
+		this.saveFile(this.getTitle(), false, success, error, unloading, overwrite);
+	}), error, unloading, overwrite]);
 };
 
 /**
@@ -319,7 +321,6 @@ OneDriveFile.prototype.saveFile = function(title, revision, success, error, unlo
 				var etag = (!overwrite && this.constructor == OneDriveFile &&
 						(DrawioFile.SYNC == 'manual' || DrawioFile.SYNC == 'auto')) ?
 						this.getCurrentEtag() : null;
-				var savedData = this.data;
 				var lastDesc = this.meta;
 				
 				// Makes sure no changes get lost while the file is saved
@@ -339,7 +340,7 @@ OneDriveFile.prototype.saveFile = function(title, revision, success, error, unlo
 				
 				prepare();
 				
-				this.ui.oneDrive.saveFile(this, mxUtils.bind(this, function(meta)
+				this.ui.oneDrive.saveFile(this, mxUtils.bind(this, function(meta, savedData)
 				{
 					this.isModified = prevModified;
 					this.savingFile = false;

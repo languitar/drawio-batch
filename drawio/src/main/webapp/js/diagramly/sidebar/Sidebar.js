@@ -51,7 +51,7 @@
 	/**
 	 * 
 	 */
-	Sidebar.prototype.gcp2 = ['Paths', 'Zones', 'Service Cards', 'Compute', 'API Platform and Ecosystems', 'Identity and Security', 'Big Data', 'Data Transfer', 'Cloud AI', 'Internet of Things', 'Storage and Databases', 'Management Tools', 'Networking', 'Developer Tools', 'Expanded Product Cards', 'User Device Cards', 'Product Cards'];
+	Sidebar.prototype.gcp2 = ['Paths', 'Zones', 'Service Cards', 'Compute', 'API Platform and Ecosystems', 'Identity and Security', 'Big Data', 'Data Transfer', 'Cloud AI', 'Internet of Things', 'Storage and Databases', 'Management Tools', 'Networking', 'Developer Tools', 'Expanded Product Cards', 'User Device Cards', 'Product Cards', 'General Icons'];
 	
 	/**
 	 *
@@ -110,10 +110,16 @@
 	/**
 	 *
 	 */
-	Sidebar.prototype.aws4 = ['Arrows', 'General Resources', 'Illustrations', 'Groups Light', 'Groups Dark', 'Analytics', 'Application Integration', 'AR VR', 'Cost Management', 'Business Productivity', 'Compute', 'Customer Engagement',
+	Sidebar.prototype.aws4b = ['Arrows', 'General Resources', 'Illustrations', 'Groups Light', 'Groups Dark', 'Analytics', 'Application Integration', 'AR VR', 'Cost Management', 'Business Productivity', 'Compute', 'Customer Engagement',
 							  'Database', 'Desktop App Streaming', 'Developer Tools', 'Game Development', 'Internet of Things', 'IoT Things', 'IoT Resources', 'Machine Learning', 'Management Tools',
-							  'Media Services', 'Migration', 'Mobile Services', 'Network Content Delivery', 'Security Identity Compliance', 'Storage'];
-	
+							  'Media Services', 'Migration', 'Mobile Services', 'Network Content Delivery', 'Security Identity Compliance', 'Storage'];	
+	/**
+	 *
+	 */
+	Sidebar.prototype.aws4 = ['Arrows', 'General Resources', 'Illustrations', 'Groups', 'Analytics', 'Application Integration', 'AR VR', 'Cost Management', 'Blockchain', 
+							  'Business Applications', 'EC2 Instance Types', 'Compute', 'Customer Engagement',
+							  'Database', 'Desktop App Streaming', 'Developer Tools', 'Game Tech', 'Internet of Things', 'IoT Things', 'IoT Resources', 'Machine Learning', 'Management Governance',
+							  'Media Services', 'Migration Transfer', 'Mobile', 'Network Content Delivery', 'Robotics', 'Satellite', 'Security Identity Compliance', 'Storage'];
 	/**
 	 * 
 	 */
@@ -174,6 +180,7 @@
            	                           {id: 'electrical', prefix: 'electrical', libs: Sidebar.prototype.electrical},
            	                           {id: 'aws2', prefix: 'aws2', libs: Sidebar.prototype.aws2},
            	                           {id: 'aws3', prefix: 'aws3', libs: Sidebar.prototype.aws3},
+           	                           {id: 'aws4b', prefix: 'aws4b', libs: Sidebar.prototype.aws4b},
            	                           {id: 'aws4', prefix: 'aws4', libs: Sidebar.prototype.aws4},
            	                           {id: 'pid', prefix: 'pid', libs: Sidebar.prototype.pids},
            	                           {id: 'cisco', prefix: 'cisco', libs: Sidebar.prototype.cisco},
@@ -427,8 +434,8 @@
 		// http://www.alderg.com/merge.html for creating a vertical stack of PNG images if multiple sidebars are part of an entry.
 		this.entries = [{title: mxResources.get('standard'),
             			entries: [{title: mxResources.get('general'), id: 'general', image: IMAGE_PATH + '/sidebar-general.png'},
-            			          {title: mxResources.get('arrows'), id: 'arrows2', image: IMAGE_PATH + '/sidebar-arrows2.png'},
             			          {title: mxResources.get('basic'), id: 'basic', image: IMAGE_PATH + '/sidebar-basic.png'},
+            			          {title: mxResources.get('arrows'), id: 'arrows2', image: IMAGE_PATH + '/sidebar-arrows2.png'},
             			          {title: mxResources.get('clipart'), id: 'clipart', image: IMAGE_PATH + '/sidebar-clipart.png'},
             			          {title: mxResources.get('flowchart'), id: 'flowchart', image: IMAGE_PATH + '/sidebar-flowchart.png'}]},
             			{title: mxResources.get('software'),
@@ -444,7 +451,8 @@
             			{title: mxResources.get('networking'),
             			entries: [{title: 'AWS17', id: 'aws3', image: IMAGE_PATH + '/sidebar-aws3.png'},
             			// TODO: Add isometric containers  		                          
-            				      {title: 'AWS18', id: 'aws4', image: IMAGE_PATH + '/sidebar-aws4.png'},
+							      {title: 'AWS18', id: 'aws4b', image: IMAGE_PATH + '/sidebar-aws4.png'},
+							      {title: 'AWS19', id: 'aws4', image: IMAGE_PATH + '/sidebar-aws4.png'},
             					  {title: 'Allied Telesis', id: 'allied_telesis', image: IMAGE_PATH + '/sidebar-allied_telesis.png'},
             			          {title: mxResources.get('aws3d'), id: 'aws3d', image: IMAGE_PATH + '/sidebar-aws3d.png'},
             			          {title: mxResources.get('azure'), id: 'azure', image: IMAGE_PATH + '/sidebar-azure.png'},
@@ -485,7 +493,7 @@
 		// Adds tags from compressed text file for improved searches
 		if (this.tagIndex != null)
 		{
-			this.addTagIndex(this.editorUi.editor.graph.decompress(this.tagIndex));
+			this.addTagIndex(Graph.decompress(this.tagIndex));
 			this.tagIndex = null;
 		}
 		
@@ -555,7 +563,7 @@
 						this.editorUi.confirm('Image data created', mxUtils.bind(this, function()
 						{
 				    		new mxXmlRequest(EXPORT_URL, 'w=456&h=' + h + '&html=' + encodeURIComponent(
-					    			this.editorUi.editor.graph.compress(html))).simulate(document, '_blank');
+				    			Graph.compress(html))).simulate(document, '_blank');
 						}), null, mxResources.get('save'), mxResources.get('cancel'));
 					}));
 					
@@ -811,7 +819,7 @@
 									mxUtils.write(title, mxResources.get('loading') + '...');
 									var url = lib.url;
 									
-									if (!this.editorUi.isCorsEnabledForUrl(url))
+									if (!this.editorUi.editor.isCorsEnabledForUrl(url))
 									{
 										url = PROXY_URL + '?url=' + encodeURIComponent(url);
 									}
@@ -863,6 +871,7 @@
 		this.addMSCAEPalette();
 		this.addBpmnPalette(dir, false);
 		this.addAWS3Palette();
+		this.addAWS4bPalette();
 		this.addAWS4Palette();
 		this.addAWS3DPalette();
 		this.addLeanMappingPalette();
@@ -1262,7 +1271,7 @@
 		// Lazy-load indices
 		if (this.searchFileData != null)
 		{
-			this.addSearchFileData(mxUtils.parseXml(this.editorUi.editor.graph.decompress(this.searchFileData)).documentElement);
+			this.addSearchFileData(mxUtils.parseXml(Graph.decompress(this.searchFileData)).documentElement);
 			
 			this.searchFileData = null;
 		}
