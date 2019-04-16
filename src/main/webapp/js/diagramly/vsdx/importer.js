@@ -216,7 +216,7 @@ var com;
 	                    //console.log(xmlBuilder.str);
 	                    if (callback) 
 	                    {
-	                    		callback(xmlBuilder.str);
+                     		callback(xmlBuilder.str);
 	                    }
                     };
 
@@ -435,7 +435,7 @@ var com;
                     });                    
                 };
                 mxVsdxCodec.prototype.createMxGraph = function () {
-                    var graph = new mxGraph();
+                    var graph = new Graph();
                     graph.setExtendParents(false);
                     graph.setExtendParentsOnAdd(false);
                     graph.setConstrainChildren(false);
@@ -454,10 +454,10 @@ var com;
                         //var pageName_1 = org.apache.commons.lang3.StringEscapeUtils.escapeXml11(page.getPageName());
                     	//TODO FIXME htmlEntities is not exactly as escapeXml11 but close
                         var pageName_1 = mxUtils.htmlEntities(page.getPageName());
-                        output += "<diagram name=\"" + pageName_1 + "\">";
+                        output += '<diagram name="' + pageName_1 + '" id="' + pageName_1 + '">';
                     }
                     
-                    output += Graph.prototype.compress(modelString);
+                    output += Graph.compress(modelString);
                     return output;
                 };
                 /**
@@ -692,6 +692,18 @@ var com;
                                     m.entries[i].value = v;
                                     return;
                                 } m.entries.push({ key: k, value: v, getKey: function () { return this.key; }, getValue: function () { return this.value; } }); })(this.vertexShapeMap, new com.mxgraph.io.vsdx.ShapePageId(pageId, id), shape);
+                            
+                            var lnkObj = shape.getHyperlink();
+                            
+                            if (lnkObj.extLink)
+                            {
+                            	graph.setLinkForCell(v1, lnkObj.extLink);
+                            }
+                            else if (lnkObj.pageLink)
+                        	{
+                            	graph.setLinkForCell(v1, 'data:page/id,' + lnkObj.pageLink);
+                        	}
+                            
                             return v1;
                         }
                         else {
@@ -1261,7 +1273,7 @@ var com;
                     _this.RESPONSE_HEADER = "";
                     return _this;
                 }
-                mxVssxCodec.prototype.decodeVssx = function (file, callback, charset) {
+                mxVssxCodec.prototype.decodeVssx = function (file, callback, charset, onerror) {
                 	var _this = this;
                     var library = { str: "<mxlibrary>[", toString: function () { return this.str; } };
                     this.decodeVsdx(file, function(shapesInPages) 
@@ -1366,7 +1378,21 @@ var com;
                         /* append */ (function (sb) { return sb.str = sb.str.concat("]</mxlibrary>"); })(library);
                         if (callback)
                     	{
-                        	callback(library.str);
+	                    	try
+	                    	{
+	                    		callback(library.str);
+	                    	}
+	                    	catch(e)
+	                    	{
+	                    		if (onerror != null) 
+	                    		{
+	                    			onerror(e);
+	                    		}
+	                    		else
+	                    		{
+	                    			callback("");
+	                    		}
+	                    	}
                     	}
                     }, charset);
                 };
@@ -8635,9 +8661,11 @@ var com;
                                                     if (position === void 0) { position = 0; }
                                                     return str.substr(position, searchString.length) === searchString;
                                                 })(format, "{{")) {
-                                                    //TODO FIXME find a date formatter (may be https://github.com/noahcooper/SimpleDateFormatJS)
-                                                	//value = new java.text.SimpleDateFormat(/* replaceAll */ format.replace(new RegExp("\\{|\\}", 'g'), "")).format(new Date(Shape.VSDX_START_TIME + Math.floor((parseFloat(value) * 24 * 60 * 60 * 1000))));
-                                                	value = new Date(Shape.VSDX_START_TIME + Math.floor((parseFloat(value) * 24 * 60 * 60 * 1000))).toString();
+                                                	//Our date format function swaps M/m meaning
+                                                	format = format.replace(/m/g, '@').replace(/M/g, 'm').replace(/@/g, 'M');
+                                                	//Date can be in string date format or a number
+                                                	var date = isNaN(value)? new Date(value) : new Date(Shape.VSDX_START_TIME + Math.floor((parseFloat(value) * 24 * 60 * 60 * 1000)));
+                                                	value = Graph.prototype.formatDate(date, /* replaceAll */ format.replace(new RegExp("\\{|\\}", 'g'), ""));
                                                 }
                                             }
                                             catch (e) {
@@ -10126,6 +10154,20 @@ var com;
                         }
                         return hor;
                     };
+                    
+                    /**
+                     * Get hyperlink address or subaddress
+                     */
+                    VsdxShape.prototype.getHyperlink = function () 
+                    {
+                    	var addressElem = this.getCellElement$java_lang_String$java_lang_String$java_lang_String('Address', null, 'Hyperlink');
+                    	var extLink = this.getValue(addressElem, '');
+                    	
+                    	var subAddressElem = this.getCellElement$java_lang_String$java_lang_String$java_lang_String('SubAddress', null, 'Hyperlink');
+                    	var pageLink = this.getValue(subAddressElem, '');
+
+                    	return {extLink: extLink, pageLink: pageLink};
+                    };
                     /**
                      * Analyzes the shape and returns a string with the style.
                      * @return {*} style read from the shape.
@@ -10791,7 +10833,7 @@ var com;
                                     return result;
                                 }
                                 
-                                var enc = Graph.prototype.compress(parsedGeom);
+                                var enc = Graph.compress(parsedGeom);
                                 /* put */ (result[mxConstants.STYLE_SHAPE] = "stencil(" + enc + ")");
                             }
                             catch (e) {
@@ -11900,7 +11942,7 @@ EditorUi.prototype.doImportVisio = function(file, done, onerror)
 {
 	if (file.name != null && /(\.vs(x|sx?))($|\?)/i.test(file.name))
 	{
-		new com.mxgraph.io.mxVssxCodec().decodeVssx(file, done);
+		new com.mxgraph.io.mxVssxCodec().decodeVssx(file, done, null, onerror);
 	}
 	else
 	{

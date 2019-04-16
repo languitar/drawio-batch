@@ -133,9 +133,10 @@ DriveFile.prototype.isMovable = function()
  */
 DriveFile.prototype.save = function(revision, success, error, unloading, overwrite)
 {
-	DrawioFile.prototype.save.apply(this, arguments);
-	
-	this.saveFile(null, revision, success, error, unloading, overwrite);
+	DrawioFile.prototype.save.apply(this, [revision, mxUtils.bind(this, function()
+	{
+		this.saveFile(null, revision, success, error, unloading, overwrite);
+	}), error, unloading, overwrite]);
 };
 
 /**
@@ -146,118 +147,205 @@ DriveFile.prototype.save = function(revision, success, error, unloading, overwri
  */
 DriveFile.prototype.saveFile = function(title, revision, success, error, unloading, overwrite)
 {
-	if (!this.isEditable())
+	try
 	{
-		if (success != null)
+		if (!this.isEditable())
 		{
-			success();
+			if (success != null)
+			{
+				success();
+			}
 		}
-	}
-	else if (!this.savingFile)
-	{
-		var doSave = mxUtils.bind(this, function(realOverwrite, realRevision)
+		else if (!this.savingFile)
 		{
-			var savedData = this.data;
-			var lastDesc = this.desc;
-			
-			// Makes sure no changes get lost while the file is saved
-			var modified = this.isModified();
-			this.setModified(false);
-			this.savingFile = true;
-
-			// Waits for success for modified state to be visible
-			var prevModified = this.isModified;
-			
-			this.isModified = function()
+			var doSave = mxUtils.bind(this, function(realOverwrite, realRevision)
 			{
-				return true;
-			};
-
-			this.ui.drive.saveFile(this, realRevision, mxUtils.bind(this, function(resp)
-			{
-				this.isModified = prevModified;
-				this.savingFile = false;
-				
-				// Handles special case where resp is false eg
-				// if the old file was converted to realtime
-				if (resp != false)
+				try
 				{
-					if (revision)
-					{
-						this.lastAutosaveRevision = new Date().getTime();
-					}
-
-					// Adaptive autosave delay
-					this.autosaveDelay = Math.min(6000,
-						Math.max(this.saveDelay + 500,
-						DrawioFile.prototype.autosaveDelay));
-					this.desc = resp;
+					var lastDesc = this.desc;
 					
-					this.fileSaved(savedData, lastDesc, mxUtils.bind(this, function()
-					{
-						this.contentChanged();
-						
-						if (success != null)
-						{
-							success(resp);
-						}
-					}), error);
-				}
-				else
-				{
-					this.setModified(modified || this.isModified());
+					// Makes sure no changes get lost while the file is saved
+					var modified = this.isModified();
+					this.setModified(false);
+					this.savingFile = true;
+		
+					// Waits for success for modified state to be visible
+					var prevModified = this.isModified;
 					
-					if (error != null)
+					this.isModified = function()
 					{
-						error(resp);
-					}
-				}
-			}), mxUtils.bind(this, function(err, desc)
-			{
-				this.savingFile = false;
-				this.isModified = prevModified;
-				this.setModified(modified || this.isModified());
-			
-				if (this.isConflict(err))
-				{
-					this.inConflictState = true;
-					
-					if (this.sync != null)
+						return true;
+					};
+		
+					this.ui.drive.saveFile(this, realRevision, mxUtils.bind(this, function(resp, savedData)
 					{
-						this.savingFile = true;
-						
-						this.sync.fileConflict(desc, mxUtils.bind(this, function()
+						try
 						{
-							// Adds random cool-off
-							window.setTimeout(mxUtils.bind(this, function()
-							{
-								this.updateFileData();
-								doSave(realOverwrite, true);
-							}), 100 + Math.random() * 500);
-						}), mxUtils.bind(this, function()
-						{
+							this.isModified = prevModified;
 							this.savingFile = false;
+							
+							// Handles special case where resp is false eg
+							// if the old file was converted to realtime
+							if (resp != false)
+							{
+								if (revision)
+								{
+									this.lastAutosaveRevision = new Date().getTime();
+								}
+			
+								// Adaptive autosave delay
+								this.autosaveDelay = Math.min(8000,
+									Math.max(this.saveDelay + 500,
+									DriveFile.prototype.autosaveDelay));
+								this.desc = resp;
+								
+								this.fileSaved(savedData, lastDesc, mxUtils.bind(this, function()
+								{
+									this.contentChanged();
+									
+									if (success != null)
+									{
+										success(resp);
+									}
+								}), error);
+							}
+							else
+							{
+								this.setModified(modified || this.isModified());
+								
+								if (error != null)
+								{
+									error(resp);
+								}
+							}
+						}
+						catch (e)
+						{
+							this.setModified(modified || this.isModified());
 							
 							if (error != null)
 							{
-								error();
+								error(e);
 							}
-						}));
-					}
-					else if (error != null)
+							else
+							{
+								throw e;
+							}
+						}
+					}), mxUtils.bind(this, function(err, desc)
 					{
-						error();
+						try
+						{
+							this.savingFile = false;
+							this.isModified = prevModified;
+							this.setModified(modified || this.isModified());
+						
+							if (this.isConflict(err))
+							{
+								this.inConflictState = true;
+								
+								if (this.sync != null)
+								{
+									this.savingFile = true;
+									
+									this.sync.fileConflict(desc, mxUtils.bind(this, function()
+									{
+										// Adds random cool-off
+										window.setTimeout(mxUtils.bind(this, function()
+										{
+											this.updateFileData();
+											doSave(realOverwrite, true);
+										}), 100 + Math.random() * 500);
+									}), mxUtils.bind(this, function()
+									{
+										this.savingFile = false;
+										
+										if (error != null)
+										{
+											error();
+										}
+									}));
+								}
+								else if (error != null)
+								{
+									error();
+								}
+							}
+							else if (error != null)
+							{
+								error(err);
+							}
+						}
+						catch (e)
+						{
+							this.setModified(modified || this.isModified());
+							
+							if (error != null)
+							{
+								error(e);
+							}
+							else
+							{
+								throw e;
+							}
+						}
+					}), unloading, unloading, realOverwrite);
+				}
+				catch (e)
+				{
+					if (error != null)
+					{
+						error(e);
+					}
+					else
+					{
+						throw e;
 					}
 				}
-				else if (error != null)
-				{
-					error(err);
-				}
-			}), unloading, unloading, realOverwrite);
-		});
-		
-		doSave(overwrite, revision);
+			});
+			
+			doSave(overwrite, revision);
+		}
 	}
+	catch (e)
+	{
+		if (error != null)
+		{
+			error(e);
+		}
+		else
+		{
+			throw e;
+		}
+	}
+};
+
+/**
+ * Shows a conflict dialog to the user.
+ */
+DriveFile.prototype.copyFile = function(success, error)
+{
+	if (!this.isRestricted())
+	{
+		this.makeCopy(mxUtils.bind(this, function()
+		{
+			if (this.ui.spinner.spin(document.body, mxResources.get('saving')))
+			{
+				try
+				{
+					this.save(true, success, error)
+				}
+				catch (e)
+				{
+					error(e);
+				}
+			}
+		}), error, true);
+	}
+	else
+	{
+		DrawioFile.prototype.copyFile.apply(this, arguments);
+	}	
 };
 
 /**
@@ -439,19 +527,16 @@ DriveFile.prototype.getRevisions = function(success, error)
 		{
 			(mxUtils.bind(this, function(item)
 			{
+				// Redirects title to originalFilename to
+				// match expected descriptor interface
+				item.title = item.originalFilename;
+				
 				item.getXml = mxUtils.bind(this, function(itemSuccess, itemError)
 				{
-					this.ui.drive.executeRequest(gapi.client.drive.revisions.get(
-					{
-						'fileId': this.getId(),
-						'revisionId': item.id
-					}), mxUtils.bind(this, function(resp)
-					{
-						this.ui.drive.getXmlFile(resp, mxUtils.bind(this, function(file)
-			   			{
-							itemSuccess(file.getData());
-			   			}), itemError);
-					}), itemError);
+					this.ui.drive.getXmlFile(item, mxUtils.bind(this, function(file)
+		   			{
+						itemSuccess(file.getData());
+		   			}), itemError);
 				});
 				
 				item.getUrl = mxUtils.bind(this, function(page)
@@ -562,7 +647,105 @@ DriveFile.prototype.loadPatchDescriptor = function(success, error)
 /**
  * Adds the listener for automatically saving the diagram for local changes.
  */
+DriveFile.prototype.patchDescriptor = function(desc, patch)
+{
+	DrawioFile.prototype.patchDescriptor.apply(this, arguments);
+	
+	desc.headRevisionId = patch.headRevisionId;
+	desc.modifiedDate = patch.modifiedDate;
+};
+
+/**
+ * Adds the listener for automatically saving the diagram for local changes.
+ */
 DriveFile.prototype.loadDescriptor = function(success, error)
 {
 	this.ui.drive.loadDescriptor(this.getId(), success, error);
+};
+
+/**
+ * Are comments supported
+ */
+DriveFile.prototype.commentsSupported = function()
+{
+	return true;
+};
+
+/**
+ * Get comments of the file
+ */
+DriveFile.prototype.getComments = function(success, error)
+{
+	var currentUser = this.ui.getCurrentUser();
+	
+	function driveCommentToDrawio(file, gComment, pCommentId)
+	{
+		if (gComment.deleted) return null; //skip deleted comments
+		
+		var comment = new DriveComment(file, gComment.commentId || gComment.replyId, gComment.content, 
+				gComment.modifiedDate, gComment.createdDate, gComment.status == 'resolved',
+				gComment.author.isAuthenticatedUser? currentUser :
+				new DrawioUser(gComment.author.permissionId, gComment.author.emailAddress,
+						gComment.author.displayName, gComment.author.picture.url), pCommentId);
+		
+		for (var i = 0; gComment.replies != null && i < gComment.replies.length; i++)
+		{
+			comment.addReplyDirect(driveCommentToDrawio(file, gComment.replies[i], gComment.commentId));
+		}
+		
+		return comment;
+	};
+	
+	this.ui.drive.executeRequest(gapi.client.drive.comments.list({'fileId': this.getId()}),
+		mxUtils.bind(this, function(resp)
+	{
+		var comments = [];
+		
+		for (var i = 0; i < resp.items.length; i++)
+		{
+			var comment = driveCommentToDrawio(this, resp.items[i]);
+			
+			if (comment != null) comments.push(comment);
+		}
+		
+		success(comments);
+	}), error);
+};
+
+/**
+ * Add a comment to the file
+ */
+DriveFile.prototype.addComment = function(comment, success, error)
+{
+	var body = {'content': comment.content};
+	
+	this.ui.drive.executeRequest(gapi.client.drive.comments.insert({'fileId': this.getId(), 'resource': body}),
+		mxUtils.bind(this, function(resp)
+	{
+		success(resp.commentId); //pass comment id
+	}), error);
+};
+
+/**
+ * Can add a reply to a reply
+ */
+DriveFile.prototype.canReplyToReplies = function()
+{
+	return false;
+};
+
+/**
+ * Can add comments (The permission to comment to this file)
+ */
+DriveFile.prototype.canComment = function()
+{
+	return this.desc.canComment;
+};
+
+/**
+ * Get a new comment object
+ */
+DriveFile.prototype.newComment = function(content, user)
+{
+	return new DriveComment(this, null, content, Date.now(), Date.now(), false, user);
 };

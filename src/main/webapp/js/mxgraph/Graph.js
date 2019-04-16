@@ -13,6 +13,38 @@ if (typeof html4 !== 'undefined')
 	//html4.ATTRIBS["video::autobuffer"] = 0;
 }
 
+// Shim for missing toISOString in older versions of IE
+// See https://stackoverflow.com/questions/12907862
+if (!Date.prototype.toISOString)
+{         
+    (function()
+    {         
+        function pad(number)
+        {
+            var r = String(number);
+            
+            if (r.length === 1) 
+            {
+                r = '0' + r;
+            }
+            
+            return r;
+        };
+        
+        Date.prototype.toISOString = function()
+        {
+            return this.getUTCFullYear()
+                + '-' + pad( this.getUTCMonth() + 1 )
+                + '-' + pad( this.getUTCDate() )
+                + 'T' + pad( this.getUTCHours() )
+                + ':' + pad( this.getUTCMinutes() )
+                + ':' + pad( this.getUTCSeconds() )
+                + '.' + String( (this.getUTCMilliseconds()/1000).toFixed(3) ).slice( 2, 5 )
+                + 'Z';
+        };       
+    }());
+}
+
 /**
  * Sets global constants.
  */
@@ -61,7 +93,7 @@ mxGraphView.prototype.gridColor = '#e0e0e0';
 mxSvgCanvas2D.prototype.foAltText = '[Not supported by viewer]';
 
 // Hook for custom constraints
-mxShape.prototype.getConstraints = function(style)
+mxShape.prototype.getConstraints = function(style, w, h)
 {
 	return null;
 };
@@ -115,7 +147,7 @@ Graph = function(container, model, renderHint, stylesheet, themes)
 		var state = this.view.getState(cell);
 		var style = (state != null) ? state.style : this.getCellStyle(cell);
 		
-		return style['html'] == '1' || style[mxConstants.STYLE_WHITE_SPACE] == 'wrap';
+		return (style != null) ? (style['html'] == '1' || style[mxConstants.STYLE_WHITE_SPACE] == 'wrap') : false;
 	};
 	
 	// Implements a listener for hover and click handling on edges
@@ -656,6 +688,11 @@ Graph = function(container, model, renderHint, stylesheet, themes)
 						}
 					}
 				}
+				
+				if (this.isEnabled() && locked)
+				{
+					this.clearSelection();
+				}
 			}
 			else
 			{
@@ -923,7 +960,7 @@ Graph.lineJumpsEnabled = true;
 Graph.defaultJumpSize = 6;
 
 /**
- * Helper function (requires atob).
+ * Helper function for creating SVG data URI.
  */
 Graph.createSvgImage = function(w, h, data)
 {
@@ -933,6 +970,103 @@ Graph.createSvgImage = function(w, h, data)
         'version="1.1">' + data + '</svg>'));
 
     return new mxImage('data:image/svg+xml;base64,' + ((window.btoa) ? btoa(tmp) : Base64.encode(tmp, true)), w, h)
+};
+
+/**
+ * Removes all illegal control characters with ASCII code <32 except TAB, LF
+ * and CR.
+ */
+Graph.zapGremlins = function(text)
+{
+	var checked = [];
+	
+	for (var i = 0; i < text.length; i++)
+	{
+		var code = text.charCodeAt(i);
+		
+		// Removes all control chars except TAB, LF and CR
+		if ((code >= 32 || code == 9 || code == 10 || code == 13) && code != 0xFFFF)
+		{
+			checked.push(text.charAt(i));
+		}
+	}
+	
+	return checked.join('');
+};
+
+/**
+ * Turns the given string into an array.
+ */
+Graph.stringToBytes = function(str)
+{
+	var arr = new Array(str.length);
+
+    for (var i = 0; i < str.length; i++)
+    {
+        arr[i] = str.charCodeAt(i);
+    }
+    
+    return arr;
+};
+
+/**
+ * Turns the given array into a string.
+ */
+Graph.bytesToString = function(arr)
+{
+	var result = new Array(arr.length);
+
+    for (var i = 0; i < arr.length; i++)
+    {
+    	result[i] = String.fromCharCode(arr[i]);
+    }
+    
+    return result.join('');
+};
+
+/**
+ * Returns a base64 encoded version of the compressed outer XML of the given node.
+ */
+Graph.compressNode = function(node)
+{
+	return Graph.compress(Graph.zapGremlins(mxUtils.getXml(node)));
+};
+
+/**
+ * Returns a base64 encoded version of the compressed string.
+ */
+Graph.compress = function(data, deflate)
+{
+	if (data == null || data.length == 0 || typeof(pako) === 'undefined')
+	{
+		return data;
+	}
+	else
+	{
+   		var tmp = Graph.bytesToString((deflate) ? pako.deflate(encodeURIComponent(data)) :
+   			pako.deflateRaw(encodeURIComponent(data)));
+   		
+   		return (window.btoa) ? btoa(tmp) : Base64.encode(tmp, true);
+	}
+};
+
+/**
+ * Returns a decompressed version of the base64 encoded string.
+ */
+Graph.decompress = function(data, inflate)
+{
+   	if (data == null || data.length == 0 || typeof(pako) === 'undefined')
+	{
+		return data;
+	}
+	else
+	{
+		var tmp = (window.atob) ? atob(data) : Base64.decode(data, true);
+		
+		return Graph.zapGremlins(decodeURIComponent(
+			Graph.bytesToString((inflate) ? pako.inflate(tmp) :
+				pako.inflateRaw(tmp))));
+	}
 };
 
 /**
@@ -1467,37 +1601,44 @@ Graph.prototype.openLink = function(href, target, allowOpener)
 {
 	var result = window;
 	
-	// Workaround for blocking in same iframe
-	if (target == '_self' && window != window.top)
+	try
 	{
-		window.location.href = href;
-	}
-	else
-	{
-		// Avoids page reload for anchors (workaround for IE but used everywhere)
-		if (href.substring(0, this.baseUrl.length) == this.baseUrl &&
-			href.charAt(this.baseUrl.length) == '#' &&
-			target == '_top' && window == window.top)
+		// Workaround for blocking in same iframe
+		if (target == '_self' && window != window.top)
 		{
-			var hash = href.split('#')[1];
-
-			// Forces navigation if on same hash
-			if (window.location.hash == '#' + hash)
-			{
-				window.location.hash = '';
-			}
-			
-			window.location.hash = hash;
+			window.location.href = href;
 		}
 		else
 		{
-			result = window.open(href, target);
-			
-			if (result != null && !allowOpener)
+			// Avoids page reload for anchors (workaround for IE but used everywhere)
+			if (href.substring(0, this.baseUrl.length) == this.baseUrl &&
+				href.charAt(this.baseUrl.length) == '#' &&
+				target == '_top' && window == window.top)
 			{
-				result.opener = null;
+				var hash = href.split('#')[1];
+	
+				// Forces navigation if on same hash
+				if (window.location.hash == '#' + hash)
+				{
+					window.location.hash = '';
+				}
+				
+				window.location.hash = hash;
+			}
+			else
+			{
+				result = window.open(href, target);
+	
+				if (result != null && !allowOpener)
+				{
+					result.opener = null;
+				}
 			}
 		}
+	}
+	catch (e)
+	{
+		// ignores permission denied
 	}
 	
 	return result;
@@ -1560,6 +1701,30 @@ Graph.prototype.isRelativeUrl = function(url)
 };
 
 /**
+ * 
+ */
+Graph.prototype.getAbsoluteUrl = function(url)
+{
+	if (url != null && this.isRelativeUrl(url))
+	{
+		if (url.charAt(0) == '#')
+		{
+			url = this.baseUrl + url;
+		}
+		else if (url.charAt(0) == '/')
+		{
+			url = this.domainUrl + url;
+		}
+		else
+		{
+			url = this.domainPathUrl + url;
+		}
+	}
+	
+	return url;
+};
+
+/**
  * Installs automatic layout via styles
  */
 Graph.prototype.initLayoutManager = function()
@@ -1568,8 +1733,8 @@ Graph.prototype.initLayoutManager = function()
 
 	this.layoutManager.getLayout = function(cell)
 	{
-		var state = this.graph.view.getState(cell);
-		var style = (state != null) ? state.style : this.graph.getCellStyle(cell);
+		// Workaround for possible invalid style after change and before view validation
+		var style = this.graph.getCellStyle(cell);
 		
 		if (style != null)
 		{
@@ -1624,10 +1789,10 @@ Graph.prototype.initLayoutManager = function()
 		return null;
 	};
 };
-	
-	/**
-	 * Returns the size of the page format scaled with the page size.
-	 */
+
+/**
+ * Returns the size of the page format scaled with the page size.
+ */
 Graph.prototype.getPageSize = function()
 {
 	return (this.pageVisible) ? new mxRectangle(0, 0, this.pageFormat.width * this.pageScale,
@@ -2120,6 +2285,12 @@ Graph.prototype.selectCellsForConnectVertex = function(cells, evt, hoverIcons)
  */
 Graph.prototype.connectVertex = function(source, direction, length, evt, forceClone, ignoreCellAt)
 {
+	// Ignores relative edge labels
+	if (source.geometry.relative && this.model.isEdge(source.parent))
+	{
+		return [];
+	}
+	
 	ignoreCellAt = (ignoreCellAt) ? ignoreCellAt : false;
 	
 	var pt = (source.geometry.relative && source.parent.geometry != null) ?
@@ -2153,7 +2324,7 @@ Graph.prototype.connectVertex = function(source, direction, length, evt, forceCl
 	var dx = t.x * s;
 	var dy = t.y * s;
 	
-	if (this.model.isVertex(parentState.cell))
+	if (parentState != null && this.model.isVertex(parentState.cell))
 	{
 		dx = parentState.x;
 		dy = parentState.y;
@@ -2687,7 +2858,7 @@ Graph.prototype.isCellConnectable = function(cell)
 	var state = this.view.getState(cell);
 	var style = (state != null) ? state.style : this.getCellStyle(cell);
 	
-	return (style['connectable'] != null) ? style['connectable']  != '0' :
+	return (style != null && style['connectable'] != null) ? style['connectable'] != '0' :
 		mxGraph.prototype.isCellConnectable.apply(this, arguments);
 };
 
@@ -2930,14 +3101,7 @@ Graph.prototype.getTooltipForCell = function(cell)
  */
 Graph.prototype.stringToBytes = function(str)
 {
-	var arr = new Array(str.length);
-
-    for (var i = 0; i < str.length; i++)
-    {
-        arr[i] = str.charCodeAt(i);
-    }
-    
-    return arr;
+	return Graph.stringToBytes(str);
 };
 
 /**
@@ -2945,14 +3109,7 @@ Graph.prototype.stringToBytes = function(str)
  */
 Graph.prototype.bytesToString = function(arr)
 {
-	var result = new Array(arr.length);
-
-    for (var i = 0; i < arr.length; i++)
-    {
-    	result[i] = String.fromCharCode(arr[i]);
-    }
-    
-    return result.join('');
+	return Graph.bytesToString(arr);
 };
 
 /**
@@ -2960,64 +3117,31 @@ Graph.prototype.bytesToString = function(arr)
  */
 Graph.prototype.compressNode = function(node)
 {
-	return this.compress(this.zapGremlins(mxUtils.getXml(node)));
+	return Graph.compressNode(node);
 };
 
 /**
  * Returns a base64 encoded version of the compressed string.
  */
-Graph.prototype.compress = function(data)
+Graph.prototype.compress = function(data, deflate)
 {
-	if (data == null || data.length == 0 || typeof(pako) === 'undefined')
-	{
-		return data;
-	}
-	else
-	{
-   		var tmp = this.bytesToString(pako.deflateRaw(encodeURIComponent(data)));
-   		
-   		return (window.btoa) ? btoa(tmp) : Base64.encode(tmp, true);
-	}
+	return Graph.compress(data, deflate);
 };
 
 /**
  * Returns a decompressed version of the base64 encoded string.
  */
-Graph.prototype.decompress = function(data)
+Graph.prototype.decompress = function(data, inflate)
 {
-   	if (data == null || data.length == 0 || typeof(pako) === 'undefined')
-	{
-		return data;
-	}
-	else
-	{
-		var tmp = (window.atob) ? atob(data) : Base64.decode(data, true);
-		
-		return this.zapGremlins(decodeURIComponent(
-			this.bytesToString(pako.inflateRaw(tmp))));
-	}
+	return Graph.decompress(data, inflate);
 };
 
 /**
- * Removes all illegal control characters with ASCII code <32 except TAB, LF
- * and CR.
+ * Redirects to Graph.zapGremlins.
  */
 Graph.prototype.zapGremlins = function(text)
 {
-	var checked = [];
-	
-	for (var i = 0; i < text.length; i++)
-	{
-		var code = text.charCodeAt(i);
-		
-		// Removes all control chars except TAB, LF and CR
-		if (code >= 32 || code == 9 || code == 10 || code == 13)
-		{
-			checked.push(text.charAt(i));
-		}
-	}
-	
-	return checked.join('');
+	return Graph.zapGremlins(text);
 };
 
 /**
@@ -3752,26 +3876,34 @@ HoverIcons.prototype.getState = function(state)
 		
 		if (!this.graph.getModel().contains(cell))
 		{
-			return null;
+			state = null;
 		}
-		else if (this.graph.getModel().isVertex(cell) && !this.graph.isCellConnectable(cell))
+		else
 		{
 			// Uses connectable parent vertex if child is not connectable
-			var parent = this.graph.getModel().getParent(cell);
-			
-			if (this.graph.getModel().isVertex(parent) && this.graph.isCellConnectable(parent))
+			if (this.graph.getModel().isVertex(cell) && !this.graph.isCellConnectable(cell))
 			{
-				cell = parent;
+				var parent = this.graph.getModel().getParent(cell);
+				
+				if (this.graph.getModel().isVertex(parent) && this.graph.isCellConnectable(parent))
+				{
+					cell = parent;
+				}
+			}
+			
+			// Ignores locked cells and edges
+			if (this.graph.isCellLocked(cell) || this.graph.model.isEdge(cell))
+			{
+				cell = null;
+			}
+			
+			state = this.graph.view.getState(cell);
+			
+			if (state != null && state.style == null)
+			{
+				state = null;
 			}
 		}
-		
-		// Ignores locked cells and edges
-		if (this.graph.isCellLocked(cell) || this.graph.model.isEdge(cell))
-		{
-			cell = null;
-		}
-		
-		state = this.graph.view.getState(cell);
 	}
 	
 	return state;
@@ -3788,6 +3920,12 @@ HoverIcons.prototype.update = function(state, x, y)
 	}
 	else
 	{
+		if (state != null && state.cell.geometry != null && state.cell.geometry.relative &&
+			this.graph.model.isEdge(state.cell.parent))
+		{
+			state = null;
+		}
+		
 		var timeOnTarget = null;
 		
 		// Time on target
@@ -3906,7 +4044,7 @@ HoverIcons.prototype.setCurrentState = function(state)
 		
 		// Adds to the list of edges that may intersect with later edges
 		if (state != null && this.graph.model.isEdge(state.cell) &&
-			state.style[mxConstants.STYLE_CURVED] != 1)
+			state.style != null && state.style[mxConstants.STYLE_CURVED] != 1)
 		{
 			// LATER: Reuse jumps for valid edges
 			this.validEdges.push(state);
@@ -4025,7 +4163,11 @@ HoverIcons.prototype.setCurrentState = function(state)
 								var pt = mxUtils.intersection(p0.x, p0.y, p1.x, p1.y, p2.x, p2.y, p3.x, p3.y);
 	
 								// Handles intersection between two segments
-								if (pt != null && (Math.abs(pt.x - p2.x) > thresh ||
+								if (pt != null && (Math.abs(pt.x - p0.x) > thresh ||
+									Math.abs(pt.y - p0.y) > thresh) &&
+									(Math.abs(pt.x - p1.x) > thresh ||
+									Math.abs(pt.y - p1.y) > thresh) &&
+									(Math.abs(pt.x - p2.x) > thresh ||
 									Math.abs(pt.y - p2.y) > thresh) &&
 									(Math.abs(pt.x - p3.x) > thresh ||
 									Math.abs(pt.y - p3.y) > thresh))
@@ -4139,8 +4281,16 @@ HoverIcons.prototype.setCurrentState = function(state)
 					{
 						n = new mxPoint(pt.x - last.x, pt.y - last.y);
 						len = Math.sqrt(n.x * n.x + n.y * n.y);
-						n.x = n.x * size / len;
-						n.y = n.y * size / len;
+						
+						if (len > 0)
+						{
+							n.x = n.x * size / len;
+							n.y = n.y * size / len;
+						}
+						else
+						{
+							n = null;
+						}
 					}
 					
 					if (dist > size * size && len > 0)
@@ -4322,7 +4472,7 @@ HoverIcons.prototype.setCurrentState = function(state)
 	    		try
 	    		{
 	    			var stencil = shape.substring(8, shape.length - 1);
-	    			var doc = mxUtils.parseXml(state.view.graph.decompress(stencil));
+	    			var doc = mxUtils.parseXml(Graph.decompress(stencil));
 	    			
 	    			return new mxShape(new mxStencil(doc.documentElement));
 	    		}
@@ -4774,6 +4924,26 @@ if (typeof mxVertexHandler != 'undefined')
 			{
 				style += 'jumpSize=' + this.currentEdgeStyle['jumpSize'] + ';';
 			}
+
+			// Overrides the global default to match the default edge style
+			if (this.currentEdgeStyle['orthogonalLoop'] != null)
+			{
+				style += 'orthogonalLoop=' + this.currentEdgeStyle['orthogonalLoop'] + ';';
+			}
+			else if (Graph.prototype.defaultEdgeStyle['orthogonalLoop'] != null)
+			{
+				style += 'orthogonalLoop=' + Graph.prototype.defaultEdgeStyle['orthogonalLoop'] + ';';
+			}
+
+			// Overrides the global default to match the default edge style
+			if (this.currentEdgeStyle['jettySize'] != null)
+			{
+				style += 'jettySize=' + this.currentEdgeStyle['jettySize'] + ';';
+			}
+			else if (Graph.prototype.defaultEdgeStyle['jettySize'] != null)
+			{
+				style += 'jettySize=' + Graph.prototype.defaultEdgeStyle['jettySize'] + ';';
+			}
 			
 			// Special logic for custom property of elbowEdgeStyle
 			if (this.currentEdgeStyle['edgeStyle'] == 'elbowEdgeStyle' && this.currentEdgeStyle['elbow'] != null)
@@ -4889,52 +5059,60 @@ if (typeof mxVertexHandler != 'undefined')
 		{
 			if (terminal != null)
 			{
-				var constraints = (terminal.shape != null) ? terminal.shape.getConstraints(terminal.style) : null;
+				var constraints = mxUtils.getValue(terminal.style, 'points', null);
 				
 				if (constraints != null)
 				{
-					return constraints;
+					// Requires an array of arrays with x, y (0..1), an optional
+					// [perimeter (0 or 1), dx, and dy] eg. points=[[0,0,1,-10,10],[0,1,0],[1,1]]
+					var result = [];
+					
+					try
+					{
+						var c = JSON.parse(constraints);
+						
+						for (var i = 0; i < c.length; i++)
+						{
+							var tmp = c[i];
+							result.push(new mxConnectionConstraint(new mxPoint(tmp[0], tmp[1]), (tmp.length > 2) ? tmp[2] != '0' : true,
+									null, (tmp.length > 3) ? tmp[3] : 0, (tmp.length > 4) ? tmp[4] : 0));
+						}
+					}
+					catch (e)
+					{
+						// ignore
+					}
+					
+					return result;
 				}
-				else
+				else if (terminal.shape != null && terminal.shape.bounds != null)
 				{
-					constraints = mxUtils.getValue(terminal.style, 'points', null);
+					var dir = terminal.shape.direction;
+					var bounds = terminal.shape.bounds;
+					var scale = terminal.shape.scale;
+					var w = bounds.width / scale;
+					var h = bounds.height / scale;
+					
+					if (dir == mxConstants.DIRECTION_NORTH || dir == mxConstants.DIRECTION_SOUTH)
+					{
+						var tmp = w;
+						w = h;
+						h = tmp;
+					}
+					
+					constraints = terminal.shape.getConstraints(terminal.style, w, h);
 					
 					if (constraints != null)
 					{
-						// Requires an array of arrays with x, y (0..1) and an optional
-						// perimeter (0 or 1), eg. points=[[0,0,1],[0,1,0],[1,1]]
-						var result = [];
-						
-						try
-						{
-							var c = JSON.parse(constraints);
-							
-							for (var i = 0; i < c.length; i++)
-							{
-								var tmp = c[i];
-								result.push(new mxConnectionConstraint(new mxPoint(tmp[0], tmp[1]), (tmp.length > 2) ? tmp[2] != '0' : true));
-							}
-						}
-						catch (e)
-						{
-							// ignore
-						}
-						
-						return result;
+						return constraints;
 					}
-					else if (terminal.shape != null)
+					else if (terminal.shape.stencil != null && terminal.shape.stencil.constraints != null)
 					{
-						if (terminal.shape.stencil != null)
-						{
-							if (terminal.shape.stencil != null)
-							{
-								return terminal.shape.stencil.constraints;
-							}
-						}
-						else if (terminal.shape.constraints != null)
-						{
-							return terminal.shape.constraints;
-						}
+						return terminal.shape.stencil.constraints;
+					}
+					else if (terminal.shape.constraints != null)
+					{
+						return terminal.shape.constraints;
 					}
 				}
 			}
@@ -5289,7 +5467,7 @@ if (typeof mxVertexHandler != 'undefined')
 		Graph.prototype.cellLabelChanged = function(cell, value, autoSize)
 		{
 			// Removes all illegal control characters in user input
-			value = this.zapGremlins(value);
+			value = Graph.zapGremlins(value);
 
 			this.model.beginUpdate();
 			try
@@ -5521,23 +5699,16 @@ if (typeof mxVertexHandler != 'undefined')
 					var state = (this.model.isEdge(cell)) ? this.view.getState(cell) : null;
 					var src = mxEvent.getSource(evt);
 					
-					if (this.firstClickState == state && this.firstClickSource == src)
+					if ((this.firstClickState == state && this.firstClickSource == src) &&
+						(state == null || (state.text == null || state.text.node == null ||
+						state.text.boundingBox == null || (!mxUtils.contains(state.text.boundingBox,
+						pt.x, pt.y) && !mxUtils.isAncestorNode(state.text.node, mxEvent.getSource(evt))))) &&
+						((state == null && !this.isCellLocked(this.getDefaultParent())) ||
+						(state != null && !this.isCellLocked(state.cell))) &&
+						(state != null || (mxClient.IS_VML && src == this.view.getCanvas()) ||
+						(mxClient.IS_SVG && src == this.view.getCanvas().ownerSVGElement)))
 					{
-						if (state == null || (state.text == null || state.text.node == null ||
-							(!mxUtils.contains(state.text.boundingBox, pt.x, pt.y) &&
-							!mxUtils.isAncestorNode(state.text.node, mxEvent.getSource(evt)))))
-						{
-							if ((state == null && !this.isCellLocked(this.getDefaultParent())) ||
-								(state != null && !this.isCellLocked(state.cell)))
-							{
-								// Avoids accidental inserts on background
-								if (state != null || (mxClient.IS_VML && src == this.view.getCanvas()) ||
-									(mxClient.IS_SVG && src == this.view.getCanvas().ownerSVGElement))
-								{
-									cell = this.addText(pt.x, pt.y, state);
-								}
-							}
-						}
+						cell = this.addText(pt.x, pt.y, state);
 					}
 				}
 			
@@ -5649,30 +5820,6 @@ if (typeof mxVertexHandler != 'undefined')
 			}
 			
 			return label;
-		};
-
-		/**
-		 * 
-		 */
-		Graph.prototype.getAbsoluteUrl = function(url)
-		{
-			if (url != null && this.isRelativeUrl(url))
-			{
-				if (url.charAt(0) == '#')
-				{
-					url = this.baseUrl + url;
-				}
-				else if (url.charAt(0) == '/')
-				{
-					url = this.domainUrl + url;
-				}
-				else
-				{
-					url = this.domainPathUrl + url;
-				}
-			}
-			
-			return url;
 		};
 
 		/**
@@ -5961,7 +6108,7 @@ if (typeof mxVertexHandler != 'undefined')
 		Graph.prototype.insertImage = function(newValue, w, h)
 		{
 			// To find the new image, we create a list of all existing links first
-			if (newValue != null)
+			if (newValue != null && this.cellEditor.textarea != null)
 			{
 				var tmp = this.cellEditor.textarea.getElementsByTagName('img');
 				var oldImages = [];
@@ -6001,60 +6148,63 @@ if (typeof mxVertexHandler != 'undefined')
 		 */
 		Graph.prototype.insertLink = function(value)
 		{
-			if (value.length == 0)
+			if (this.cellEditor.textarea != null)
 			{
-				document.execCommand('unlink', false);
-			}
-			else if (mxClient.IS_FF)
-			{
-				// Workaround for Firefox that adds a new link and removes
-				// the href from the inner link if its parent is a span is
-				// to remove all inner links inside the new outer link
-				var tmp = this.cellEditor.textarea.getElementsByTagName('a');
-				var oldLinks = [];
-				
-				for (var i = 0; i < tmp.length; i++)
+				if (value.length == 0)
 				{
-					oldLinks.push(tmp[i]);
+					document.execCommand('unlink', false);
 				}
-				
-				document.execCommand('createlink', false, mxUtils.trim(value));
-				
-				// Finds the new link element
-				var newLinks = this.cellEditor.textarea.getElementsByTagName('a');
-				
-				if (newLinks.length == oldLinks.length + 1)
+				else if (mxClient.IS_FF)
 				{
-					// Inverse order in favor of appended links
-					for (var i = newLinks.length - 1; i >= 0; i--)
+					// Workaround for Firefox that adds a new link and removes
+					// the href from the inner link if its parent is a span is
+					// to remove all inner links inside the new outer link
+					var tmp = this.cellEditor.textarea.getElementsByTagName('a');
+					var oldLinks = [];
+					
+					for (var i = 0; i < tmp.length; i++)
 					{
-						if (newLinks[i] != oldLinks[i - 1])
+						oldLinks.push(tmp[i]);
+					}
+					
+					document.execCommand('createlink', false, mxUtils.trim(value));
+					
+					// Finds the new link element
+					var newLinks = this.cellEditor.textarea.getElementsByTagName('a');
+					
+					if (newLinks.length == oldLinks.length + 1)
+					{
+						// Inverse order in favor of appended links
+						for (var i = newLinks.length - 1; i >= 0; i--)
 						{
-							// Removes all inner links from the new link and
-							// moves the children to the inner link parent
-							var tmp = newLinks[i].getElementsByTagName('a');
-							
-							while (tmp.length > 0)
+							if (newLinks[i] != oldLinks[i - 1])
 							{
-								var parent = tmp[0].parentNode;
+								// Removes all inner links from the new link and
+								// moves the children to the inner link parent
+								var tmp = newLinks[i].getElementsByTagName('a');
 								
-								while (tmp[0].firstChild != null)
+								while (tmp.length > 0)
 								{
-									parent.insertBefore(tmp[0].firstChild, tmp[0]);
+									var parent = tmp[0].parentNode;
+									
+									while (tmp[0].firstChild != null)
+									{
+										parent.insertBefore(tmp[0].firstChild, tmp[0]);
+									}
+									
+									parent.removeChild(tmp[0]);
 								}
 								
-								parent.removeChild(tmp[0]);
+								break;
 							}
-							
-							break;
 						}
 					}
 				}
-			}
-			else
-			{
-				// LATER: Fix inserting link/image in IE8/quirks after focus lost
-				document.execCommand('createlink', false, mxUtils.trim(value));
+				else
+				{
+					// LATER: Fix inserting link/image in IE8/quirks after focus lost
+					document.execCommand('createlink', false, mxUtils.trim(value));
+				}
 			}
 		};
 		
@@ -6285,7 +6435,7 @@ if (typeof mxVertexHandler != 'undefined')
 				// Prepares SVG document that holds the output
 				var svgDoc = mxUtils.createXmlDocument();
 				var root = (svgDoc.createElementNS != null) ?
-			    		svgDoc.createElementNS(mxConstants.NS_SVG, 'svg') : svgDoc.createElement('svg');
+			    	svgDoc.createElementNS(mxConstants.NS_SVG, 'svg') : svgDoc.createElement('svg');
 			    
 				if (background != null)
 				{
@@ -6322,7 +6472,11 @@ if (typeof mxVertexHandler != 'undefined')
 			
 			    // Renders graph. Offset will be multiplied with state's scale when painting state.
 				// TextOffset only seems to affect FF output but used everywhere for consistency.
-				var svgCanvas = this.createSvgCanvas(root);
+				var group = (svgDoc.createElementNS != null) ?
+			    	svgDoc.createElementNS(mxConstants.NS_SVG, 'g') : svgDoc.createElement('g');
+			    root.appendChild(group);
+
+				var svgCanvas = this.createSvgCanvas(group);
 				svgCanvas.foOffset = (crisp) ? -0.5 : 0;
 				svgCanvas.textOffset = (crisp) ? -0.5 : 0;
 				svgCanvas.imageOffset = (crisp) ? -0.5 : 0;
@@ -7113,106 +7267,110 @@ if (typeof mxVertexHandler != 'undefined')
 		mxCellEditor.prototype.toggleViewMode = function()
 		{
 			var state = this.graph.view.getState(this.editingCell);
-			var nl2Br = state != null && mxUtils.getValue(state.style, 'nl2Br', '1') != '0';
-			var tmp = this.saveSelection();
 			
-			if (!this.codeViewMode)
+			if (state != null)
 			{
-				// Clears the initial empty label on the first keystroke
-				if (this.clearOnChange && this.textarea.innerHTML == this.getEmptyLabelText())
+				var nl2Br = state != null && mxUtils.getValue(state.style, 'nl2Br', '1') != '0';
+				var tmp = this.saveSelection();
+				
+				if (!this.codeViewMode)
 				{
-					this.clearOnChange = false;
-					this.textarea.innerHTML = '';
-				}
-				
-				// Removes newlines from HTML and converts breaks to newlines
-				// to match the HTML output in plain text
-				var content = mxUtils.htmlEntities(this.textarea.innerHTML);
-	
-			    // Workaround for trailing line breaks being ignored in the editor
-				if (!mxClient.IS_QUIRKS && document.documentMode != 8)
-				{
-					content = mxUtils.replaceTrailingNewlines(content, '<div><br></div>');
-				}
-				
-			    content = this.graph.sanitizeHtml((nl2Br) ? content.replace(/\n/g, '').replace(/&lt;br\s*.?&gt;/g, '<br>') : content, true);
-				this.textarea.className = 'mxCellEditor mxPlainTextEditor';
-				
-				var size = mxConstants.DEFAULT_FONTSIZE;
-				
-				this.textarea.style.lineHeight = (mxConstants.ABSOLUTE_LINE_HEIGHT) ? Math.round(size * mxConstants.LINE_HEIGHT) + 'px' : mxConstants.LINE_HEIGHT;
-				this.textarea.style.fontSize = Math.round(size) + 'px';
-				this.textarea.style.textDecoration = '';
-				this.textarea.style.fontWeight = 'normal';
-				this.textarea.style.fontStyle = '';
-				this.textarea.style.fontFamily = mxConstants.DEFAULT_FONTFAMILY;
-				this.textarea.style.textAlign = 'left';
-				
-				// Adds padding to make cursor visible with borders
-				this.textarea.style.padding = '2px';
-				
-				if (this.textarea.innerHTML != content)
-				{
-					this.textarea.innerHTML = content;
-				}
-	
-				this.codeViewMode = true;
-			}
-			else
-			{
-				var content = mxUtils.extractTextWithWhitespace(this.textarea.childNodes);
-			    
-				// Strips trailing line break
-			    if (content.length > 0 && content.charAt(content.length - 1) == '\n')
-			    {
-			    	content = content.substring(0, content.length - 1);
-			    }
-			    
-				content = this.graph.sanitizeHtml((nl2Br) ? content.replace(/\n/g, '<br/>') : content, true)
-				this.textarea.className = 'mxCellEditor geContentEditable';
-				
-				var size = mxUtils.getValue(state.style, mxConstants.STYLE_FONTSIZE, mxConstants.DEFAULT_FONTSIZE);
-				var family = mxUtils.getValue(state.style, mxConstants.STYLE_FONTFAMILY, mxConstants.DEFAULT_FONTFAMILY);
-				var align = mxUtils.getValue(state.style, mxConstants.STYLE_ALIGN, mxConstants.ALIGN_LEFT);
-				var bold = (mxUtils.getValue(state.style, mxConstants.STYLE_FONTSTYLE, 0) &
-						mxConstants.FONT_BOLD) == mxConstants.FONT_BOLD;
-				var italic = (mxUtils.getValue(state.style, mxConstants.STYLE_FONTSTYLE, 0) &
-						mxConstants.FONT_ITALIC) == mxConstants.FONT_ITALIC;
-				var uline = (mxUtils.getValue(state.style, mxConstants.STYLE_FONTSTYLE, 0) &
-						mxConstants.FONT_UNDERLINE) == mxConstants.FONT_UNDERLINE;
-				
-				this.textarea.style.lineHeight = (mxConstants.ABSOLUTE_LINE_HEIGHT) ? Math.round(size * mxConstants.LINE_HEIGHT) + 'px' : mxConstants.LINE_HEIGHT;
-				this.textarea.style.fontSize = Math.round(size) + 'px';
-				this.textarea.style.textDecoration = (uline) ? 'underline' : '';
-				this.textarea.style.fontWeight = (bold) ? 'bold' : 'normal';
-				this.textarea.style.fontStyle = (italic) ? 'italic' : '';
-				this.textarea.style.fontFamily = family;
-				this.textarea.style.textAlign = align;
-				this.textarea.style.padding = '0px';
-				
-				if (this.textarea.innerHTML != content)
-				{
-					this.textarea.innerHTML = content;
-					
-					if (this.textarea.innerHTML.length == 0)
+					// Clears the initial empty label on the first keystroke
+					if (this.clearOnChange && this.textarea.innerHTML == this.getEmptyLabelText())
 					{
-						this.textarea.innerHTML = this.getEmptyLabelText();
-						this.clearOnChange = this.textarea.innerHTML.length > 0;
+						this.clearOnChange = false;
+						this.textarea.innerHTML = '';
 					}
-				}
-	
-				this.codeViewMode = false;
-			}
-			
-			this.textarea.focus();
+					
+					// Removes newlines from HTML and converts breaks to newlines
+					// to match the HTML output in plain text
+					var content = mxUtils.htmlEntities(this.textarea.innerHTML);
 		
-			if (this.switchSelectionState != null)
-			{
-				this.restoreSelection(this.switchSelectionState);
-			}
+				    // Workaround for trailing line breaks being ignored in the editor
+					if (!mxClient.IS_QUIRKS && document.documentMode != 8)
+					{
+						content = mxUtils.replaceTrailingNewlines(content, '<div><br></div>');
+					}
+					
+				    content = this.graph.sanitizeHtml((nl2Br) ? content.replace(/\n/g, '').replace(/&lt;br\s*.?&gt;/g, '<br>') : content, true);
+					this.textarea.className = 'mxCellEditor mxPlainTextEditor';
+					
+					var size = mxConstants.DEFAULT_FONTSIZE;
+					
+					this.textarea.style.lineHeight = (mxConstants.ABSOLUTE_LINE_HEIGHT) ? Math.round(size * mxConstants.LINE_HEIGHT) + 'px' : mxConstants.LINE_HEIGHT;
+					this.textarea.style.fontSize = Math.round(size) + 'px';
+					this.textarea.style.textDecoration = '';
+					this.textarea.style.fontWeight = 'normal';
+					this.textarea.style.fontStyle = '';
+					this.textarea.style.fontFamily = mxConstants.DEFAULT_FONTFAMILY;
+					this.textarea.style.textAlign = 'left';
+					
+					// Adds padding to make cursor visible with borders
+					this.textarea.style.padding = '2px';
+					
+					if (this.textarea.innerHTML != content)
+					{
+						this.textarea.innerHTML = content;
+					}
+		
+					this.codeViewMode = true;
+				}
+				else
+				{
+					var content = mxUtils.extractTextWithWhitespace(this.textarea.childNodes);
+				    
+					// Strips trailing line break
+				    if (content.length > 0 && content.charAt(content.length - 1) == '\n')
+				    {
+				    	content = content.substring(0, content.length - 1);
+				    }
+				    
+					content = this.graph.sanitizeHtml((nl2Br) ? content.replace(/\n/g, '<br/>') : content, true)
+					this.textarea.className = 'mxCellEditor geContentEditable';
+					
+					var size = mxUtils.getValue(state.style, mxConstants.STYLE_FONTSIZE, mxConstants.DEFAULT_FONTSIZE);
+					var family = mxUtils.getValue(state.style, mxConstants.STYLE_FONTFAMILY, mxConstants.DEFAULT_FONTFAMILY);
+					var align = mxUtils.getValue(state.style, mxConstants.STYLE_ALIGN, mxConstants.ALIGN_LEFT);
+					var bold = (mxUtils.getValue(state.style, mxConstants.STYLE_FONTSTYLE, 0) &
+							mxConstants.FONT_BOLD) == mxConstants.FONT_BOLD;
+					var italic = (mxUtils.getValue(state.style, mxConstants.STYLE_FONTSTYLE, 0) &
+							mxConstants.FONT_ITALIC) == mxConstants.FONT_ITALIC;
+					var uline = (mxUtils.getValue(state.style, mxConstants.STYLE_FONTSTYLE, 0) &
+							mxConstants.FONT_UNDERLINE) == mxConstants.FONT_UNDERLINE;
+					
+					this.textarea.style.lineHeight = (mxConstants.ABSOLUTE_LINE_HEIGHT) ? Math.round(size * mxConstants.LINE_HEIGHT) + 'px' : mxConstants.LINE_HEIGHT;
+					this.textarea.style.fontSize = Math.round(size) + 'px';
+					this.textarea.style.textDecoration = (uline) ? 'underline' : '';
+					this.textarea.style.fontWeight = (bold) ? 'bold' : 'normal';
+					this.textarea.style.fontStyle = (italic) ? 'italic' : '';
+					this.textarea.style.fontFamily = family;
+					this.textarea.style.textAlign = align;
+					this.textarea.style.padding = '0px';
+					
+					if (this.textarea.innerHTML != content)
+					{
+						this.textarea.innerHTML = content;
+						
+						if (this.textarea.innerHTML.length == 0)
+						{
+							this.textarea.innerHTML = this.getEmptyLabelText();
+							this.clearOnChange = this.textarea.innerHTML.length > 0;
+						}
+					}
+		
+					this.codeViewMode = false;
+				}
+				
+				this.textarea.focus();
 			
-			this.switchSelectionState = tmp;
-			this.resize();
+				if (this.switchSelectionState != null)
+				{
+					this.restoreSelection(this.switchSelectionState);
+				}
+				
+				this.switchSelectionState = tmp;
+				this.resize();
+			}
 		};
 		
 		var mxCellEditorResize = mxCellEditor.prototype.resize;

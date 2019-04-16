@@ -19,7 +19,7 @@ EditorUi.initMinimalTheme = function()
        style.type = 'text/css';
        style.innerHTML = '* { -webkit-font-smoothing: antialiased; }' +
        	   'html body .mxWindow button.geBtn { font-size:12px !important; margin-left: 0; }' +
-       	   'html body table.mxWindow td.mxWindowPane div.mxWindowPane * { font-size:9pt; }' +
+       	   'html body table.mxWindow td.mxWindowPane div.mxWindowPane *:not(svg *) { font-size:9pt; }' +
            'html body div.diagramContainer button, html body button.geBtn { font-size:14px; font-weight:700;border-radius: 5px; }' +
            'html body button.geBtn:active { opacity: 0.6; }' +
            'html body a.geMenuItem { opacity: 0.75; }' +
@@ -118,6 +118,21 @@ EditorUi.initMinimalTheme = function()
 	            mxWindow.prototype.setLocation.apply(this, arguments);
 	        }
 	    };
+	    
+	    // Workaround for text selection starting in Safari
+	    // when dragging shapes outside of window
+	    if (mxClient.IS_SF)
+	    {
+		    this.window.div.onselectstart = mxUtils.bind(this, function(evt)
+		    {
+				if (evt == null)
+				{
+					evt = window.event;
+				}
+				
+				return (evt != null && editorUi.isSelectionAllowed(evt));
+			});
+	    }
 	};
 
 	function toggleFormat(ui)
@@ -169,6 +184,7 @@ EditorUi.initMinimalTheme = function()
 	            div.style.cssText = 'position:absolute;left:0;right:0;border-top:1px solid lightgray;' +
 	                'height:24px;bottom:31px;text-align:center;cursor:pointer;padding:6px 0 0 0;';
 	            div.className = 'geTitle';
+	            div.innerHTML = '<span style="font-size:18px;margin-right:5px;">+</span>';
 	            mxUtils.write(div, mxResources.get('moreShapes'));
 	            container.appendChild(div);
 	            
@@ -332,7 +348,7 @@ EditorUi.initMinimalTheme = function()
         {
         	// Makes room for view zoom menu
         	this.tabContainer.style.right = '70px';
-        	this.diagramContainer.style.bottom = '30px';
+        	this.diagramContainer.style.bottom = this.tabContainerHeight + 'px';
         }
     	
     	editorUiUpdateTabContainer.apply(this, arguments);
@@ -403,20 +419,6 @@ EditorUi.initMinimalTheme = function()
     		elt.className = 'geToolbarButton';
     		elt.innerHTML = '';
 			elt.style.backgroundImage = 'url(' + Editor.shareImage + ')';
-        	elt.style.backgroundPosition = 'center center';
-        	elt.style.backgroundRepeat = 'no-repeat';
-        	elt.style.backgroundSize = '24px 24px';
-        	elt.style.height = '24px';
-        	elt.style.width = '24px';
-		}
-    	
-    	if (this.syncButton != null)
-		{
-    		var elt = this.syncButton;
-    		elt.style.cssText = 'display:inline-block;position:relative;box-sizing:border-box;margin-right:4px;cursor:pointer;';
-    		elt.className = 'geToolbarButton';
-    		elt.innerHTML = '';
-			elt.style.backgroundImage = 'url(' + Editor.syncImage + ')';
         	elt.style.backgroundPosition = 'center center';
         	elt.style.backgroundRepeat = 'no-repeat';
         	elt.style.backgroundSize = '24px 24px';
@@ -535,10 +537,8 @@ EditorUi.initMinimalTheme = function()
         {
             menu.addSeparator();
             this.addMenuItems(menu, ['editData'], null, evt);
-        	menu.addSeparator();
-            this.addSubmenu('insert', menu);
-            this.addSubmenu('layout', menu);
             menu.addSeparator();
+            this.addSubmenu('layout', menu);
             this.addSubmenu('view', menu, null, mxResources.get('options'));
             this.addMenuItems(menu, ['-', 'exitGroup'], null, evt);
         }
@@ -649,14 +649,7 @@ EditorUi.initMinimalTheme = function()
         var ui = this.editorUi;
         var graph = ui.editor.graph;
         
-        ui.actions.get('insertText').label = mxResources.get('text');
-        ui.actions.get('insertText').label = mxResources.get('text');
         ui.actions.get('editDiagram').label = mxResources.get('formatXml') + '...';
-        ui.actions.get('insertRectangle').label = mxResources.get('rectangle');
-        ui.actions.get('insertEllipse').label = mxResources.get('ellipse');
-        ui.actions.get('insertRhombus').label = mxResources.get('rhombus');
-        ui.actions.get('insertImage').label = mxResources.get('image') + '...';
-        ui.actions.get('insertLink').label = mxResources.get('link') + '...';
         ui.actions.get('createShape').label = mxResources.get('shape') + '...';
         ui.actions.get('outline').label = mxResources.get('outline') + '...';
         ui.actions.get('layers').label = mxResources.get('layers') + '...';
@@ -772,7 +765,14 @@ EditorUi.initMinimalTheme = function()
 			
 			ui.menus.addSubmenu('exportAs', menu, parent);
 
-			ui.menus.addMenuItems(menu, ['-', 'outline', 'layers', '-', 'find', 'tags'], parent);
+			ui.menus.addMenuItems(menu, ['-', 'outline', 'layers'], parent);
+			
+			if (ui.commentsSupported())
+			{
+				ui.menus.addMenuItems(menu, ['comments'], parent);
+			}
+			
+			ui.menus.addMenuItems(menu, ['-', 'find', 'tags'], parent);
 			
 			// Cannot use print in standalone mode on iOS as we cannot open new windows
 			if (!mxClient.IS_IOS || !navigator.standalone)
@@ -886,8 +886,18 @@ EditorUi.initMinimalTheme = function()
         
         this.put('insert', new Menu(mxUtils.bind(this, function(menu, parent)
         {
-            ui.menus.addMenuItems(menu, ['insertRectangle', 'insertEllipse', 'insertRhombus', '-', 'insertText',
-                                         'insertLink', '-', 'insertImage'], parent);
+            ui.menus.addMenuItems(menu, ['insertRectangle', 'insertEllipse', 'insertRhombus', '-',
+            	'insertText', 'insertLink', '-', 'insertImage'], parent);
+            
+            if (ui.insertTemplateEnabled && !ui.isOffline())
+			{
+                ui.menus.addMenuItems(menu, ['insertTemplate'], parent);
+			}
+            
+            menu.addSeparator(parent);
+            ui.menus.addSubmenu('insertLayout', menu, parent);
+            ui.menus.addSubmenu('insertAdvanced', menu, parent);
+            menu.addSeparator(parent);
             
             if (mxClient.IS_CHROMEAPP || EditorUi.isElectronApp)
             {
@@ -897,10 +907,6 @@ EditorUi.initMinimalTheme = function()
             {
             	ui.menus.addSubmenu('importFrom', menu, parent);
             }
-            
-            menu.addSeparator(parent);
-            ui.menus.addSubmenu('insertLayout', menu, parent);
-            ui.menus.addSubmenu('insertAdvanced', menu, parent);
         })));
 
         var methods = ['horizontalFlow', 'verticalFlow', '-', 'horizontalTree', 'verticalTree',
@@ -958,7 +964,12 @@ EditorUi.initMinimalTheme = function()
         div.style.cssText = 'position:absolute;left:0px;right:0px;top:0px;overflow-y:auto;overflow-x:hidden;';
         div.style.bottom = (urlParams['embed'] != '1' || urlParams['libraries'] == '1') ? '63px' : '32px';
         this.sidebar = this.createSidebar(div);
-
+        
+        if (urlParams['clibs'] != null || urlParams['libs'] != null)
+        {
+        	toggleShapes(this);
+        }
+        
         // Needed for creating elements in Format panel
         var ui = this;
         var graph = ui.editor.graph;
@@ -1093,7 +1104,7 @@ EditorUi.initMinimalTheme = function()
                 action.addListener('stateChanged', updateState);
                 updateState();
             }
-            
+           
             return btn;
         };
         
@@ -1193,7 +1204,8 @@ EditorUi.initMinimalTheme = function()
 		menubar.appendChild(ui.statusContainer);
 
 		ui.buttonContainer = document.createElement('div');
-		ui.buttonContainer.style.cssText = 'position:absolute;right:40px;top:12px;white-space:nowrap;';
+		ui.buttonContainer.style.cssText = 'position:absolute;right:0px;padding-right:34px;top:10px;' +
+			'white-space:nowrap;padding-top:2px;background-color:inherit;';
 		menubar.appendChild(ui.buttonContainer);
 		
 		// Container for the user element
@@ -1237,10 +1249,11 @@ EditorUi.initMinimalTheme = function()
 			elt.style.fontSize = '12px';
 			elt.style.color = '#707070';
 			elt.style.width = '59px';
+			elt.style.cursor = 'pointer';
 			elt.style.borderTop = '1px solid lightgray';
 			elt.style.borderLeft = '1px solid lightgray';
-			elt.style.height = (parseInt(ui.tabContainer.style.height) - 1) + 'px';
-			elt.style.lineHeight = (parseInt(ui.tabContainer.style.height) + 1) + 'px';
+			elt.style.height = (parseInt(ui.tabContainerHeight) - 1) + 'px';
+			elt.style.lineHeight = (parseInt(ui.tabContainerHeight) + 1) + 'px';
 			wrapper.appendChild(elt);
 	        
 	    	// Updates the label if the scale changes
@@ -1263,7 +1276,8 @@ EditorUi.initMinimalTheme = function()
 	    		if (this.tabContainer != null)
 	    		{
 	    			elt.style.visibility = this.tabContainer.style.visibility;
-    	        	this.diagramContainer.style.bottom = (this.tabContainer.style.visibility != 'hidden') ? '30px' : '0px';
+    	        	this.diagramContainer.style.bottom = (this.tabContainer.style.visibility != 'hidden') ?
+    	        		this.tabContainerHeight + 'px' : '0px';
 	    		}
 	    	};
 		}
@@ -1295,7 +1309,7 @@ EditorUi.initMinimalTheme = function()
         	
         	before = menubar.firstChild;
 	        iw = window.innerWidth || document.documentElement.clientWidth || document.body.clientWidth;
-	        var small = iw < 900;
+	        var small = iw < 1000;
 	 
 	        if (!small)
 	        {
@@ -1359,7 +1373,7 @@ EditorUi.initMinimalTheme = function()
 	        var langMenu = ui.menus.get('language');
 
 			if (langMenu != null && !mxClient.IS_CHROMEAPP &&
-				!EditorUi.isElectronApp && iw >= 540)
+				!EditorUi.isElectronApp && iw >= 600)
 			{
 				if (langMenuElt == null)
 				{
@@ -1374,18 +1388,24 @@ EditorUi.initMinimalTheme = function()
 		        	elt.style.height = '24px';
 		        	elt.style.width = '24px';
 					elt.style.zIndex = '1';
-					elt.style.top = '11px';
-					elt.style.right = '14px';
+					elt.style.right = '8px';
 					elt.style.cursor = 'pointer';
+					elt.style.top = (urlParams['embed'] == '1') ? '13px' : '11px';
 					menubar.appendChild(elt);
 					langMenuElt = elt;
 				}
 				
-				ui.buttonContainer.style.right = '40px';
+				ui.buttonContainer.style.paddingRight = '34px';
 			}
 			else
 			{
-				ui.buttonContainer.style.right = '14px';
+				ui.buttonContainer.style.paddingRight = '4px';
+				
+				if (langMenuElt != null)
+				{
+					langMenuElt.parentNode.removeChild(langMenuElt);
+					langMenuElt = null;
+				}
 			}
         };
         
