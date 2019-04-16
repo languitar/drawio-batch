@@ -40,3 +40,12 @@ rm test.pdf
 node drawio-batch.js ./drawio/src/main/webapp/templates/uml/uml_1.xml test.svg
 file test.svg | grep 'Scalable Vector Graphics'
 rm test.svg
+
+# check SVG export with inline HTML
+# must no produce error output
+if [ -n "$(node drawio-batch.js ./test/inline-html.xml test.svg 2>&1)" ]
+then
+    exit 1
+fi
+file test.svg | grep 'Scalable Vector Graphics'
+rm test.svg
