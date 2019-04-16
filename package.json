@@ -1,13 +1,13 @@
 {
   "name": "drawio-batch",
-  "version": "10.0.22",
+  "version": "10.6.3",
   "description": "A command line converter for drawio diagrams",
   "bin": "drawio-batch.js",
   "dependencies": {
-    "commander": "^2.19.0",
-    "puppeteer": "^1.9.0",
-    "xpath": "^0.0.27",
-    "xmldom": "^0.1.27"
+    "commander": "^2.20.0",
+    "puppeteer": "^1.14.0",
+    "xmldom": "^0.1.27",
+    "xpath": "^0.0.27"
   },
   "pkg": {
     "assets": "drawio/**/*"

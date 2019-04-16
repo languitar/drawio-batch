@@ -87,8 +87,10 @@ const puppeteer = require('puppeteer');
     var bounds = await page.mainFrame().$eval('#LoadingComplete', div => div.getAttribute('bounds'));
     var bounds = JSON.parse(bounds);
 
-    var width = Math.ceil(bounds.x + bounds.width)
-    var height = Math.ceil(bounds.y + bounds.height)
+    // Chrome generates pdf files larger than requested pixels size and requires scaling
+    var fixingScale = 0.959;
+    var width = Math.min(bounds.width, program.bounds.width || Infinity)
+    var height = Math.min(bounds.height, program.bounds.height || Infinity)
 
     await page.setViewport({width: width, height: height})
 
@@ -138,7 +140,11 @@ const puppeteer = require('puppeteer');
       });
 
     } else {
-      await page.screenshot({path: output, clip: bounds, quality: process.quality})
+      await page.screenshot({
+        path: output,
+        clip: {x: bounds.x / 2.0, y: bounds.y / 2.0, width: width + bounds.x, height: height + bounds.y},
+        quality: process.quality
+      })
     }
   } catch (error) {
     console.log(error)
