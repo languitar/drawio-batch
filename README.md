@@ -1,3 +1,7 @@
+# DEPRECATED
+
+[Drawio desktop](https://github.com/jgraph/drawio-desktop) now ships with a command line mode that provides the complete functionality of dawio-batch. I will not continue to develop on this piece of software.
+
 # drawio-batch
 
 [![Build Status](https://travis-ci.org/languitar/drawio-batch.svg?branch=master)](https://travis-ci.org/languitar/drawio-batch)
